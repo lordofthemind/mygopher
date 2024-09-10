@@ -2,6 +2,8 @@
 ├── LICENSE
 ├── README.md
 ├── go.mod
+├── go.sum
+├── main.go
 ├── mygopherginserver
 │   ├── StartGinServer.go
 │   └── StopGinServer.go
@@ -14,4 +16,4 @@
 │   └── ConnectPostgresGORM.go
 └── tree.txt
 
-5 directories, 10 files
+5 directories, 12 files

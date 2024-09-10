@@ -10,32 +10,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ConnectToPostgreSQLGormDB establishes a connection to the PostgreSQL database using GORM,
-// with automatic retry logic and context-based timeout handling. It ensures that the
-// `uuid-ossp` extension is enabled in the database upon successful connection.
-//
-// Parameters:
-//   - ctx: A context to control the connection's cancellation and timeout.
-//   - dsn: The Data Source Name (DSN), typically the database connection string.
-//   - timeout: The total duration allowed for the connection attempts before timing out.
-//   - maxRetries: The maximum number of connection attempts in case of failure.
-//
-// Returns:
-//   - *gorm.DB: A pointer to the GORM DB instance if the connection is successful.
-//   - error: An error describing the failure if the connection cannot be established
-//     within the given number of retries.
-//
-// Example usage:
-//
-//	ctx := context.Background()
-//	dsn := "postgres://username:password@localhost:5432/dbname?sslmode=disable"
-//	timeout := 30 * time.Second
-//	maxRetries := 3
-//
-//	db, err := ConnectToPostgreSQLGormDB(ctx, dsn, timeout, maxRetries)
-//	if err != nil {
-//	    log.Fatalf("Error connecting to the database: %v", err)
-//	}
 func ConnectToPostgreSQLGormDB(ctx context.Context, dsn string, timeout time.Duration, maxRetries int) (*gorm.DB, error) {
 	// Set a timeout for the connection operation using the context
 	ctx, cancel := context.WithTimeout(ctx, timeout)

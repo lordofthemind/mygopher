@@ -8,31 +8,6 @@ import (
 	"time"
 )
 
-// SetUpLoggerFile sets up logging to both a file and stdout.
-//
-// It creates a "logs" directory if it doesn't already exist. It generates a log file name
-// based on the current date and time and opens this file for appending. The function configures
-// logging to output to both the file and stdout. If there is an issue opening the log file,
-// it falls back to logging only to stdout.
-//
-// Parameters:
-//   - logFileName: The base name for the log file (e.g., "app.log"). The final log file name
-//     will include a timestamp prefix to ensure uniqueness.
-//
-// Returns:
-//   - *os.File: A pointer to the opened log file which should be closed by the caller when
-//     logging is complete or when the application shuts down.
-//   - error: An error is returned if the function fails to create the log directory or open
-//     the log file. If an error occurs while opening the log file, it falls back to stdout
-//     logging and logs the error.
-//
-// Example usage:
-//
-//	logFile, err := logger.SetUpLoggerFile("app.log")
-//	if err != nil {
-//	    log.Fatalf("Failed to set up logger: %v", err)
-//	}
-//	defer logFile.Close() // Ensure to close the log file when the application exits
 func SetUpLoggerFile(logFileName string) (*os.File, error) {
 	// Ensure the logs directory exists
 	if err := os.MkdirAll("logs", 0755); err != nil {
