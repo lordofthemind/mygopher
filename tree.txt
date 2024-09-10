@@ -1,0 +1,17 @@
+.
+├── LICENSE
+├── README.md
+├── go.mod
+├── mygopherginserver
+│   ├── StartGinServer.go
+│   └── StopGinServer.go
+├── mygopherlogger
+│   └── SetupLoggerFile.go
+├── mygophermongodb
+│   └── ConnectMongoDB.go
+├── mygopherpostgres
+│   ├── ConnectPostgresDB.go
+│   └── ConnectPostgresGORM.go
+└── tree.txt
+
+5 directories, 10 files
