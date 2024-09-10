@@ -1,32 +1,23 @@
-# mygopher
+# mygopher - A Go Utilities Package
 
-This Go package provides a set of utilities for working with various backend components, including PostgreSQL, MongoDB, Gin server management, and logging. It is designed to be modular and easy to integrate into your existing projects.
+`mygopher` is a modular Go package that provides utility functions for connecting to MongoDB and PostgreSQL databases, managing Gin servers, and setting up logging. This package is designed to simplify backend development by offering reusable components.
 
-## Project Structure
+## Table of Contents
 
-```
-.
-├── LICENSE
-├── README.md
-├── go.mod
-├── go.sum
-├── main.go
-├── mygopherginserver
-│   ├── StartGinServer.go
-│   └── StopGinServer.go
-├── mygopherlogger
-│   └── SetupLoggerFile.go
-├── mygophermongodb
-│   └── ConnectMongoDB.go
-├── mygopherpostgres
-│   ├── ConnectPostgresDB.go
-│   └── ConnectPostgresGORM.go
-└── tree.txt
-```
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Set Up Logger](#set-up-logger)
+  - [Connect to MongoDB](#connect-to-mongodb)
+  - [Connect to PostgreSQL](#connect-to-postgresql)
+  - [Connect to PostgreSQL using GORM](#connect-to-postgresql-using-gorm)
+- [Examples](#examples)
+- [License](#license)
+- [Contributing](#contributing)
+- [Contact](#contact)
 
 ## Installation
 
-To use this package in your project, you can install it via Go modules:
+Install the package using Go modules:
 
 ```bash
 go get github.com/lordofthemind/mygopher@v0.1.0
@@ -36,60 +27,22 @@ Replace `v0.1.0` with the desired version.
 
 ## Usage
 
-### Gin Server Management (`mygopherginserver`)
+Below are the primary functionalities provided by the MyGopher package:
 
-This package provides functions to start and stop a Gin server.
+### Set Up Logger
 
-#### Start the Gin Server
-
-```go
-package main
-
-import (
-    "github.com/lordofthemind/mygopher/mygopherginserver"
-)
-
-func main() {
-    err := mygopherginserver.StartGinServer()
-    if err != nil {
-        log.Fatalf("Failed to start Gin server: %v", err)
-    }
-}
-```
-
-#### Stop the Gin Server
-
-```go
-package main
-
-import (
-    "github.com/lordofthemind/mygopher/mygopherginserver"
-)
-
-func main() {
-    err := mygopherginserver.StopGinServer()
-    if err != nil {
-        log.Fatalf("Failed to stop Gin server: %v", err)
-    }
-}
-```
-
-### Logger Setup (`mygopherlogger`)
-
-Set up logging to both a file and stdout with ease.
-
-#### Example
+Set up logging to both a file and stdout with automatic log file management.
 
 ```go
 package main
 
 import (
     "log"
-    "github.com/lordofthemind/mygopher/mygopherlogger"
+    "github.com/lordofthemind/mygopher"
 )
 
 func main() {
-    logFile, err := mygopherlogger.SetupLoggerFile("app.log")
+    logFile, err := mygopher.SetUpLoggerFile("app.log")
     if err != nil {
         log.Fatalf("Failed to set up logger: %v", err)
     }
@@ -97,11 +50,9 @@ func main() {
 }
 ```
 
-### MongoDB Connection (`mygophermongodb`)
+### Connect to MongoDB
 
-Connect to a MongoDB instance with retries.
-
-#### Example
+Establish a connection to MongoDB with retry logic and a context-based timeout.
 
 ```go
 package main
@@ -110,18 +61,17 @@ import (
     "context"
     "log"
     "time"
-
-    "github.com/lordofthemind/mygopher/mygophermongodb"
+    "github.com/lordofthemind/mygopher"
 )
 
 func main() {
     ctx := context.Background()
-    dsn := "mongodb://localhost:27017"
+    dsn := os.Getenv("MONGO_DOCKER_CONNECTION_URL")
     timeout := 30 * time.Second
-    maxRetries := 3
-    dbName := "mydatabase"
+    maxRetries := 5
+    dbName := "polyglot" // Replace with your actual database name
 
-    client, db, err := mygophermongodb.ConnectToMongoDB(ctx, dsn, timeout, maxRetries, dbName)
+    client, db, err := mygopher.ConnectToMongoDB(ctx, dsn, timeout, maxRetries, dbName)
     if err != nil {
         log.Fatalf("Error connecting to MongoDB: %v", err)
     }
@@ -129,9 +79,9 @@ func main() {
 }
 ```
 
-### PostgreSQL Connection (`mygopherpostgres`)
+### Connect to PostgreSQL
 
-#### Using `database/sql`
+Connect to a PostgreSQL database using the `database/sql` package with context-based timeout and retry logic.
 
 ```go
 package main
@@ -140,8 +90,7 @@ import (
     "context"
     "log"
     "time"
-
-    "github.com/lordofthemind/mygopher/mygopherpostgres"
+    "github.com/lordofthemind/mygopher"
 )
 
 func main() {
@@ -150,7 +99,7 @@ func main() {
     timeout := 30 * time.Second
     maxRetries := 3
 
-    db, err := mygopherpostgres.ConnectPostgresDB(ctx, dsn, timeout, maxRetries)
+    db, err := mygopher.ConnectPostgresDB(ctx, dsn, timeout, maxRetries)
     if err != nil {
         log.Fatalf("Error connecting to the database: %v", err)
     }
@@ -158,7 +107,9 @@ func main() {
 }
 ```
 
-#### Using GORM
+### Connect to PostgreSQL using GORM
+
+Connect to a PostgreSQL database using GORM with retry logic and context-based timeout.
 
 ```go
 package main
@@ -167,8 +118,7 @@ import (
     "context"
     "log"
     "time"
-
-    "github.com/lordofthemind/mygopher/mygopherpostgres"
+    "github.com/lordofthemind/mygopher"
 )
 
 func main() {
@@ -177,12 +127,16 @@ func main() {
     timeout := 30 * time.Second
     maxRetries := 3
 
-    db, err := mygopherpostgres.ConnectToPostgreSQLGormDB(ctx, dsn, timeout, maxRetries)
+    db, err := mygopher.ConnectToPostgreSQLGormDB(ctx, dsn, timeout, maxRetries)
     if err != nil {
         log.Fatalf("Error connecting to the database with GORM: %v", err)
     }
 }
 ```
+
+## Examples
+
+Check the examples in the `/examples` directory for more detailed use cases.
 
 ## License
 

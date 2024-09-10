@@ -8,7 +8,8 @@
 │   ├── StartGinServer.go
 │   └── StopGinServer.go
 ├── mygopherlogger
-│   └── SetupLoggerFile.go
+│   ├── SetupLoggerFile.go
+│   └── SetupLoggerFile_test.go
 ├── mygophermongodb
 │   └── ConnectMongoDB.go
 ├── mygopherpostgres
@@ -16,4 +17,4 @@
 │   └── ConnectPostgresGORM.go
 └── tree.txt
 
-5 directories, 12 files
+5 directories, 13 files
