@@ -1,4 +1,4 @@
-package mygophermongodb
+package gophermongo
 
 import (
 	"context"
@@ -10,14 +10,15 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func ConnectToMongoDB(ctx context.Context, dsn string, timeout time.Duration, maxRetries int, dbName string) (*mongo.Client, *mongo.Database, error) {
+// ConnectToMongoDB connects to MongoDB and returns the client.
+func ConnectToMongoDB(ctx context.Context, dsn string, timeout time.Duration, maxRetries int) (*mongo.Client, error) {
 	// Set a timeout for the connection operation using the context
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// Validate the DSN (connection string) input
 	if dsn == "" {
-		return nil, nil, fmt.Errorf("missing required MongoDB connection string (DSN)")
+		return nil, fmt.Errorf("missing required MongoDB connection string (DSN)")
 	}
 
 	var client *mongo.Client
@@ -29,15 +30,14 @@ func ConnectToMongoDB(ctx context.Context, dsn string, timeout time.Duration, ma
 		select {
 		case <-ctx.Done():
 			// If context times out or is canceled, exit with an error
-			return nil, nil, fmt.Errorf("context timed out while trying to connect to MongoDB: %w", ctx.Err())
+			return nil, fmt.Errorf("context timed out while trying to connect to MongoDB: %w", ctx.Err())
 		default:
 			// Try to establish a connection to MongoDB
 			client, err = mongo.Connect(ctx, options.Client().ApplyURI(dsn))
 			if err == nil {
-				// Successfully connected, return the client and the database instance
+				// Successfully connected, return the client
 				log.Println("Connected to MongoDB successfully")
-				db := client.Database(dbName)
-				return client, db, nil
+				return client, nil
 			}
 
 			// Log the failure and retry after a delay
@@ -47,5 +47,10 @@ func ConnectToMongoDB(ctx context.Context, dsn string, timeout time.Duration, ma
 	}
 
 	// Return error if all retries fail
-	return nil, nil, fmt.Errorf("failed to connect to MongoDB after %d retries: %w", maxRetries, err)
+	return nil, fmt.Errorf("failed to connect to MongoDB after %d retries: %w", maxRetries, err)
+}
+
+// GetDatabase returns the MongoDB database instance for the given database name.
+func GetDatabase(client *mongo.Client, dbName string) *mongo.Database {
+	return client.Database(dbName)
 }

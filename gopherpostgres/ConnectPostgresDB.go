@@ -1,4 +1,4 @@
-package mygopherpostgres
+package gopherpostgres
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	_ "github.com/lib/pq" // Import the PostgreSQL driver
+	_ "github.com/lib/pq"
 )
 
 func ConnectPostgresDB(ctx context.Context, dsn string, timeout time.Duration, maxRetries int) (*sql.DB, error) {

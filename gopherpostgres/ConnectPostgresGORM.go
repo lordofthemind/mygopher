@@ -1,4 +1,4 @@
-package mygopherpostgres
+package gopherpostgres
 
 import (
 	"context"
@@ -10,7 +10,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func ConnectToPostgreSQLGormDB(ctx context.Context, dsn string, timeout time.Duration, maxRetries int) (*gorm.DB, error) {
+// ConnectToPostgresGORM attempts to connect to PostgreSQL using GORM with retries.
+func ConnectToPostgresGORM(ctx context.Context, dsn string, timeout time.Duration, maxRetries int) (*gorm.DB, error) {
 	// Set a timeout for the connection operation using the context
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -34,7 +35,7 @@ func ConnectToPostgreSQLGormDB(ctx context.Context, dsn string, timeout time.Dur
 			// Try to open the connection using GORM
 			db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 			if err == nil {
-				// Successfully connected, enable the uuid-ossp extension if necessary
+				// Successfully connected
 				log.Println("Connected to PostgreSQL using GORM successfully")
 				return db, nil // Return the connected DB instance
 			}
