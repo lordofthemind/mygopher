@@ -22,15 +22,132 @@ Here's the detailed documentation in markdown format for your repository, groupe
 
 ### About
 
-The `gophergin` package provides a simple function to set up a Gin web server. It’s designed to ease the process of setting up routes and middleware in a clean and maintainable way.
+The `gophergin` package provides a set of tools for setting up a Gin web server with customizable configurations. It supports both CORS-enabled and non-CORS setups, static file serving, template loading, TLS (HTTPS) support, and graceful shutdowns. This package helps developers create production-ready HTTP servers with ease.
+
+## Installation
+
+To install and use the `gophergin` package, follow these steps:
+
+1. First, make sure you have [Go](https://golang.org/dl/) installed and properly set up.
+2. Run the following command to install the `gophergin` package and its dependencies:
+
+```bash
+go get github.com/lordofthemind/mygopher/gophergin
+```
+
+This command fetches the package from the repository and installs it in your Go workspace.
+
+3. After installing, you can import and use the package in your Go project like this:
+
+```go
+import "github.com/lordofthemind/mygopher/gophergin"
+```
+
+### Types
+
+#### `ServerConfig`
+`ServerConfig` holds the configuration for setting up the Gin server.
+
+**Fields:**
+- `Port`: The port on which the server will listen (e.g., `8080`).
+- `StaticPath`: Path to static files to be served (e.g., `./static`).
+- `TemplatePath`: Path to HTML templates (e.g., `./templates`).
+- `UseTLS`: A boolean flag to indicate whether TLS/HTTPS should be used.
+- `TLSCertFile`: Path to the TLS certificate file.
+- `TLSKeyFile`: Path to the TLS private key file.
+- `UseCORS`: A boolean flag to enable CORS.
+- `CORSConfig`: Configuration for the CORS middleware if `UseCORS` is true.
+
+#### `ServerSetup`
+`ServerSetup` is an interface for setting up a Gin server.
 
 ### Functions
 
-#### `SetUpGinServer()`
-Sets up and returns a configured Gin server with standard settings.
+#### `SetUpServer(config ServerConfig) (*gin.Engine, error)`
+
+**CorsServerSetup**
+
+This method sets up a Gin server with optional CORS support, static file serving, and template loading.
+
+**Parameters:**
+- `config`: An instance of `ServerConfig` with the server's configuration.
 
 **Returns:**
-- `*gin.Engine`: A new Gin web server instance.
+- `*gin.Engine`: The Gin engine (router) instance, which can be used to define routes and start the server.
+- `error`: An error if the server setup fails.
+
+**Example usage:**
+
+```go
+serverConfig := ServerConfig{
+    StaticPath:   "./static",
+    TemplatePath: "./templates",
+    UseCORS:      true,
+    CORSConfig: cors.Config{
+        AllowOrigins: []string{"https://example.com"},
+        AllowMethods: []string{"GET", "POST"},
+    },
+}
+
+router, err := (&CorsServerSetup{}).SetUpServer(serverConfig)
+if err != nil {
+    log.Fatalf("Failed to set up server: %v", err)
+}
+```
+
+#### `StartGinServer(router *gin.Engine, config ServerConfig) error`
+
+Starts the Gin server using the provided router configuration. It supports both HTTP and HTTPS (TLS) setups.
+
+**Parameters:**
+- `router`: The `*gin.Engine` instance to start.
+- `config`: The `ServerConfig` containing server options like port and TLS files.
+
+**Returns:**
+- `error`: An error if the server fails to start.
+
+**Example usage:**
+
+```go
+err := StartGinServer(router, serverConfig)
+if err != nil {
+    log.Fatalf("Failed to start server: %v", err)
+}
+```
+
+#### `GracefulShutdown(server *http.Server)`
+
+Handles the graceful shutdown of the server when an interrupt signal (Ctrl+C) is received. It ensures all in-flight requests are completed before shutting down within a given timeout (5 seconds).
+
+**Parameters:**
+- `server`: The `*http.Server` instance representing the running Gin server.
+
+**Example usage:**
+
+```go
+go GracefulShutdown(&http.Server{Addr: ":8080"})
+```
+
+#### `LoadTLSCertificate(certFile, keyFile string) (tls.Certificate, error)`
+
+Loads the TLS certificate and private key from the specified files to enable HTTPS for the server.
+
+**Parameters:**
+- `certFile`: Path to the TLS certificate file.
+- `keyFile`: Path to the TLS key file.
+
+**Returns:**
+- `tls.Certificate`: The loaded TLS certificate.
+- `error`: An error if the certificate fails to load.
+
+**Example usage:**
+
+```go
+cert, err := LoadTLSCertificate("/path/to/cert.crt", "/path/to/key.key")
+if err != nil {
+    log.Fatalf("Failed to load TLS certificate: %v", err)
+}
+```
 
 ### Example Usage
 
@@ -38,14 +155,46 @@ Sets up and returns a configured Gin server with standard settings.
 package main
 
 import (
-	"github.com/lordofthemind/mygopher/gophergin"
+    "log"
+    "github.com/gin-contrib/cors"
+    "github.com/lordofthemind/mygopher/gophergin"
 )
 
 func main() {
-	server := gophergin.SetUpGinServer()
-	server.Run(":8080")
+    // Define server configuration
+    serverConfig := gophergin.ServerConfig{
+        Port:         8080,
+        StaticPath:   "./static",
+        TemplatePath: "./templates",
+        UseTLS:       false,
+        UseCORS:      true,
+        CORSConfig: cors.Config{
+            AllowOrigins: []string{"https://example.com"},
+            AllowMethods: []string{"GET", "POST"},
+        },
+    }
+
+    // Set up the server with CORS support
+    router, err := (&gophergin.CorsServerSetup{}).SetUpServer(serverConfig)
+    if err != nil {
+        log.Fatalf("Failed to set up server: %v", err)
+    }
+
+    // Start the server
+    if err := gophergin.StartGinServer(router, serverConfig); err != nil {
+        log.Fatalf("Failed to start server: %v", err)
+    }
+
+    // Gracefully shutdown on interrupt
+    gophergin.GracefulShutdown(&http.Server{Addr: ":8080"})
 }
 ```
+
+### Notes
+- **TLS Support**: To enable HTTPS, set `UseTLS` to `true` and provide valid paths for `TLSCertFile` and `TLSKeyFile`.
+- **Graceful Shutdown**: The `GracefulShutdown` function ensures that the server is terminated gracefully without abruptly closing active connections.
+- **CORS Configuration**: The CORS settings can be customized via `CORSConfig` in `ServerConfig`.
+
 
 ---
 
