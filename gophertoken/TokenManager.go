@@ -1,21 +1,36 @@
-package tokens
+package gophertoken
 
-import (
-	"time"
+import "time"
 
-	"github.com/lordofthemind/htmx_GO/internals/configs"
-)
-
+// TokenManager is the interface for creating and verifying tokens.
+//
+// Example usage:
+//
+//	var manager TokenManager
+//	manager, err = NewTokenManager("jwt", "your-secret-key")
+//	if err != nil {
+//	  log.Fatal(err)
+//	}
 type TokenManager interface {
-	// CreateToken creates a new token for a specific user
 	GenerateToken(username string, duration time.Duration) (string, error)
-	// VerifyToken checks if the token is valid or not
-	ValidateToken(tokenString string) (*Payload, error)
+	ValidateToken(token string) (*Payload, error)
 }
 
-func NewTokenManager() (TokenManager, error) {
-	if configs.UseJWT {
-		return NewJWTMaker()
+// NewTokenManager creates a new token manager (JWT or Paseto) depending on the provided type.
+//
+// Example usage:
+//
+//	manager, err := NewTokenManager("jwt", "your-secret-key")
+//	if err != nil {
+//	  log.Fatal(err)
+//	}
+func NewTokenManager(tokenType, secretKey string) (TokenManager, error) {
+	switch tokenType {
+	case "jwt":
+		return NewJWTMaker(secretKey)
+	case "paseto":
+		return NewPasetoMaker(secretKey)
+	default:
+		return nil, ErrInvalidToken
 	}
-	return NewPasetoMaker()
 }

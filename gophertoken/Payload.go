@@ -1,4 +1,4 @@
-package tokens
+package gophertoken
 
 import (
 	"errors"
@@ -7,11 +7,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// Errors related to token validation.
 var (
 	ErrInvalidToken = errors.New("token is invalid")
 	ErrExpiredToken = errors.New("token has expired")
 )
 
+// Payload contains the data embedded within a token.
 type Payload struct {
 	ID        uuid.UUID `json:"id"`
 	Username  string    `json:"username"`
@@ -19,7 +21,14 @@ type Payload struct {
 	ExpiredAt time.Time `json:"expired_at"`
 }
 
-// NewPayload creates a new token payload with the username and duration
+// NewPayload creates a new token payload with a specific username and token duration.
+//
+// Example usage:
+//
+//	payload, err := NewPayload("user123", time.Hour)
+//	if err != nil {
+//	  log.Fatal(err)
+//	}
 func NewPayload(username string, duration time.Duration) (*Payload, error) {
 	tokenID, err := uuid.NewRandom()
 	if err != nil {
@@ -36,6 +45,14 @@ func NewPayload(username string, duration time.Duration) (*Payload, error) {
 	return payload, nil
 }
 
+// Valid checks if the payload's expiration date has passed and returns an error if it has.
+//
+// Example usage:
+//
+//	err := payload.Valid()
+//	if err != nil {
+//	  log.Fatal("Token expired")
+//	}
 func (payload *Payload) Valid() error {
 	if time.Now().After(payload.ExpiredAt) {
 		return ErrExpiredToken
