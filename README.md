@@ -1,341 +1,290 @@
-Here's a detailed documentation guide for each package in your repository. This guide includes an overview, purpose, installation instructions, and usage examples for each package, making it easy for other developers to understand and use your code.
+Here's the detailed documentation in markdown format for your repository, grouped by packages:
 
 ---
 
-## **gophergin** Documentation
+# MyGopher
 
-### **Overview**
+**MyGopher** is a collection of utility packages written in Go, designed to simplify common tasks such as web server setup, middleware integration, database connections (MongoDB, PostgreSQL), and token management (JWT and Paseto). Each package is modular, allowing you to integrate them into your project as needed.
 
-`gophergin` provides utilities for setting up a Gin server with optional CORS and TLS support. It abstracts the configuration of CORS policies and allows the creation of secure servers with minimal effort.
+## Table of Contents
 
-### **Installation**
+- [GopherGin](#gophergin)
+- [GopherMiddleware](#gophermiddleware)
+- [GopherMongo](#gophermongo)
+- [GopherPostgres](#gopherpostgres)
+- [GopherToken](#gophertoken)
 
-To use this package, you can install it using the `go get` command:
+---
 
-```bash
-go get github.com/yourusername/repositoryname/gophergin
-```
+## GopherGin
 
-### **Functions**
+**Package:** `gophergin`
 
-#### **SetUpServerWithOptionalCORS()**
+### About
 
-This function sets up a Gin server with or without CORS based on a configuration. It returns a `*gin.Engine` instance.
+The `gophergin` package provides a simple function to set up a Gin web server. It’s designed to ease the process of setting up routes and middleware in a clean and maintainable way.
 
-- **Example**:
-    ```go
-    router, err := gophergin.SetUpServerWithOptionalCORS()
-    if err != nil {
-        log.Fatal("Failed to set up server:", err)
-    }
-    ```
+### Functions
 
-#### **StartGinServer(router *gin.Engine)**
+#### `SetUpGinServer()`
+Sets up and returns a configured Gin server with standard settings.
 
-Starts the Gin server on a specified port, with TLS if enabled.
+**Returns:**
+- `*gin.Engine`: A new Gin web server instance.
 
-- **Example**:
-    ```go
-    err := gophergin.StartGinServer(router)
-    if err != nil {
-        log.Fatal("Failed to start server:", err)
-    }
-    ```
-
-#### **GracefulShutdown(server *http.Server)**
-
-Handles the graceful shutdown of the Gin server.
-
-- **Example**:
-    ```go
-    gophergin.GracefulShutdown(server)
-    ```
-
-### **Usage Example**
+### Example Usage
 
 ```go
 package main
 
 import (
-    "log"
-    "github.com/yourusername/repositoryname/gophergin"
+	"github.com/lordofthemind/mygopher/gophergin"
 )
 
 func main() {
-    router, err := gophergin.SetUpServerWithOptionalCORS()
-    if err != nil {
-        log.Fatal("Error setting up server:", err)
-    }
-
-    // Start the server
-    err = gophergin.StartGinServer(router)
-    if err != nil {
-        log.Fatal("Error starting server:", err)
-    }
+	server := gophergin.SetUpGinServer()
+	server.Run(":8080")
 }
 ```
 
 ---
 
-## **gophermongo** Documentation
+## GopherMiddleware
 
-### **Overview**
+**Package:** `gophermiddleware`
 
-`gophermongo` provides utilities for connecting to MongoDB and retrieving collections and databases. It simplifies MongoDB setup by providing connection helpers.
+### About
 
-### **Installation**
+The `gophermiddleware` package provides middleware components that can be plugged into your web server (Gin, Echo, etc.). It’s designed to handle various HTTP request and response modifications or checks.
 
-```bash
-go get github.com/yourusername/repositoryname/gophermongo
-```
+### Example Usage
 
-### **Functions**
+To be filled in once additional middleware features are added.
 
-#### **ConnectMongoDB(uri string) (*mongo.Client, error)**
+---
 
-Connects to a MongoDB instance and returns a Mongo client.
+## GopherMongo
 
-- **Example**:
-    ```go
-    client, err := gophermongo.ConnectMongoDB("mongodb://localhost:27017")
-    if err != nil {
-        log.Fatal("Failed to connect to MongoDB:", err)
-    }
-    ```
+**Package:** `gophermongo`
 
-#### **GetDatabase(client *mongo.Client, dbName string) (*mongo.Database, error)**
+### About
 
-Retrieves a MongoDB database from the client.
+The `gophermongo` package simplifies the process of connecting to MongoDB, retrieving databases and collections. It supports connection retries and uses context for managing connection timeouts.
 
-- **Example**:
-    ```go
-    db, err := gophermongo.GetDatabase(client, "mydb")
-    if err != nil {
-        log.Fatal("Failed to get database:", err)
-    }
-    ```
+### Functions
 
-#### **GetCollection(db *mongo.Database, collectionName string) (*mongo.Collection, error)**
+#### `ConnectToMongoDB(ctx, dsn, timeout, maxRetries)`
+Establishes a connection to MongoDB with retries and a context timeout.
 
-Retrieves a specific collection from a MongoDB database.
+**Parameters:**
+- `ctx`: Context for connection management.
+- `dsn`: MongoDB connection string (Data Source Name).
+- `timeout`: Duration for the connection attempt.
+- `maxRetries`: Maximum number of retries before giving up.
 
-- **Example**:
-    ```go
-    collection, err := gophermongo.GetCollection(db, "users")
-    if err != nil {
-        log.Fatal("Failed to get collection:", err)
-    }
-    ```
+**Returns:**
+- `*mongo.Client`: The connected MongoDB client instance on success.
+- `error`: An error if the connection fails.
 
-### **Usage Example**
+#### `GetDatabase(client, dbName)`
+Retrieves a specified MongoDB database instance from the client.
+
+**Parameters:**
+- `client`: MongoDB client instance.
+- `dbName`: Name of the database to retrieve.
+
+**Returns:**
+- `*mongo.Database`: The MongoDB database instance.
+
+#### `GetCollection(db, collectionName)`
+Retrieves a specified MongoDB collection from the database.
+
+**Parameters:**
+- `db`: MongoDB database instance.
+- `collectionName`: Name of the collection to retrieve.
+
+**Returns:**
+- `*mongo.Collection`: The MongoDB collection instance.
+
+### Example Usage
 
 ```go
 package main
 
 import (
-    "log"
-    "github.com/yourusername/repositoryname/gophermongo"
+	"context"
+	"log"
+	"time"
+
+	"github.com/lordofthemind/mygopher/gophermongo"
 )
 
 func main() {
-    // Connect to MongoDB
-    client, err := gophermongo.ConnectMongoDB("mongodb://localhost:27017")
-    if err != nil {
-        log.Fatal("Failed to connect:", err)
-    }
+	ctx := context.Background()
+	client, err := gophermongo.ConnectToMongoDB(ctx, "mongodb://localhost:27017", 10*time.Second, 3)
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
+	}
+	defer client.Disconnect(ctx)
 
-    // Get Database
-    db, err := gophermongo.GetDatabase(client, "mydb")
-    if err != nil {
-        log.Fatal("Failed to get database:", err)
-    }
-
-    // Get Collection
-    collection, err := gophermongo.GetCollection(db, "users")
-    if err != nil {
-        log.Fatal("Failed to get collection:", err)
-    }
-
-    log.Println("Successfully connected to collection:", collection.Name())
+	database := gophermongo.GetDatabase(client, "myDatabase")
+	collection := gophermongo.GetCollection(database, "myCollection")
+	// Use collection for CRUD operations...
 }
 ```
 
 ---
 
-## **gopherpostgres** Documentation
+## GopherPostgres
 
-### **Overview**
+**Package:** `gopherpostgres`
 
-`gopherpostgres` provides utilities to connect to PostgreSQL databases using both `database/sql` and GORM. It simplifies the connection setup to PostgreSQL.
+### About
 
-### **Installation**
+The `gopherpostgres` package helps in connecting to PostgreSQL using either the standard SQL driver or GORM (an ORM library). It includes retry logic and context-based timeouts for connection management.
 
-```bash
-go get github.com/yourusername/repositoryname/gopherpostgres
-```
+### Functions
 
-### **Functions**
+#### `ConnectPostgresDB(ctx, dsn, timeout, maxRetries)`
+Connects to a PostgreSQL database using the standard SQL package with retries.
 
-#### **ConnectPostgresDB(dsn string) (*sql.DB, error)**
+**Parameters:**
+- `ctx`: Context for connection management.
+- `dsn`: PostgreSQL connection string (Data Source Name).
+- `timeout`: Duration for the connection attempt.
+- `maxRetries`: Maximum number of retries before giving up.
 
-Connects to PostgreSQL using the provided DSN (Data Source Name) and returns a `*sql.DB` instance.
+**Returns:**
+- `*sql.DB`: The connected PostgreSQL database instance.
+- `error`: An error if the connection fails.
 
-- **Example**:
-    ```go
-    db, err := gopherpostgres.ConnectPostgresDB("host=localhost user=postgres password=mysecretpassword dbname=mydb sslmode=disable")
-    if err != nil {
-        log.Fatal("Failed to connect to PostgreSQL:", err)
-    }
-    ```
+#### `ConnectToPostgresGORM(ctx, dsn, timeout, maxRetries)`
+Connects to a PostgreSQL database using GORM with retries.
 
-#### **ConnectPostgresGORM(dsn string) (*gorm.DB, error)**
+**Parameters:**
+- `ctx`: Context for connection management.
+- `dsn`: PostgreSQL connection string (Data Source Name).
+- `timeout`: Duration for the connection attempt.
+- `maxRetries`: Maximum number of retries before giving up.
 
-Connects to PostgreSQL using GORM and returns a `*gorm.DB` instance.
+**Returns:**
+- `*gorm.DB`: The connected GORM PostgreSQL database instance.
+- `error`: An error if the connection fails.
 
-- **Example**:
-    ```go
-    gormDB, err := gopherpostgres.ConnectPostgresGORM("host=localhost user=postgres password=mysecretpassword dbname=mydb sslmode=disable")
-    if err != nil {
-        log.Fatal("Failed to connect to PostgreSQL via GORM:", err)
-    }
-    ```
-
-### **Usage Example**
+### Example Usage
 
 ```go
 package main
 
 import (
-    "log"
-    "github.com/yourusername/repositoryname/gopherpostgres"
+	"context"
+	"log"
+	"time"
+
+	"github.com/lordofthemind/mygopher/gopherpostgres"
 )
 
 func main() {
-    // Connect to PostgreSQL using database/sql
-    db, err := gopherpostgres.ConnectPostgresDB("host=localhost user=postgres password=mysecretpassword dbname=mydb sslmode=disable")
-    if err != nil {
-        log.Fatal("Failed to connect to PostgreSQL:", err)
-    }
-    log.Println("Connected to PostgreSQL")
+	ctx := context.Background()
+	db, err := gopherpostgres.ConnectPostgresDB(ctx, "postgres://user:password@localhost:5432/mydb", 10*time.Second, 3)
+	if err != nil {
+		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+	}
+	defer db.Close()
 
-    // Connect to PostgreSQL using GORM
-    gormDB, err := gopherpostgres.ConnectPostgresGORM("host=localhost user=postgres password=mysecretpassword dbname=mydb sslmode=disable")
-    if err != nil {
-        log.Fatal("Failed to connect to PostgreSQL via GORM:", err)
-    }
-    log.Println("Connected to PostgreSQL using GORM:", gormDB.Name())
+	// Use db for SQL operations...
 }
 ```
 
 ---
 
-## **gophertoken** Documentation
+## GopherToken
 
-### **Overview**
+**Package:** `gophertoken`
 
-`gophertoken` provides an easy-to-use interface for generating and validating tokens using both JWT and Paseto encryption. It allows you to choose between token types, with built-in support for symmetric keys.
+### About
 
-### **Installation**
+The `gophertoken` package provides an interface and implementations for JWT and Paseto token creation and validation. It includes a payload structure and methods for generating tokens with expiration and validating them.
 
-```bash
-go get github.com/yourusername/repositoryname/gophertoken
-```
+### Functions
 
-### **Interfaces**
+#### `NewTokenManager(tokenType, secretKey)`
+Creates a new token manager (JWT or Paseto) depending on the provided type.
 
-#### **TokenManager Interface**
+**Parameters:**
+- `tokenType`: Either "jwt" or "paseto".
+- `secretKey`: Secret key for signing tokens.
 
-```go
-type TokenManager interface {
-    GenerateToken(username string, duration time.Duration) (string, error)
-    ValidateToken(token string) (*Payload, error)
-}
-```
+**Returns:**
+- `TokenManager`: An instance of the token manager.
 
-#### **NewTokenManager(tokenType, secretKey string) (TokenManager, error)**
+#### `GenerateToken(username, duration)`
+Generates a token for a given user and duration.
 
-This function returns a `TokenManager` that can handle either JWT or Paseto tokens based on the `tokenType` parameter.
+**Parameters:**
+- `username`: The username for the token.
+- `duration`: The token's validity duration.
 
-- **Parameters**:
-    - `tokenType`: Choose either `"jwt"` or `"paseto"`.
-    - `secretKey`: Symmetric key for signing tokens.
+**Returns:**
+- `string`: The generated token.
+- `error`: An error if token generation fails.
 
-- **Example**:
-    ```go
-    tokenManager, err := gophertoken.NewTokenManager("jwt", "your-secret-key")
-    if err != nil {
-        log.Fatal("Failed to create token manager:", err)
-    }
-    ```
+#### `ValidateToken(token)`
+Validates the given token and returns the payload.
 
-### **Functions**
+**Parameters:**
+- `token`: The token to validate.
 
-#### **GenerateToken(username string, duration time.Duration) (string, error)**
+**Returns:**
+- `*Payload`: The decoded token payload.
+- `error`: An error if token validation fails.
 
-Generates a token for a user with a specific validity duration.
-
-- **Example**:
-    ```go
-    token, err := tokenManager.GenerateToken("john_doe", time.Hour)
-    if err != nil {
-        log.Fatal("Failed to generate token:", err)
-    }
-    ```
-
-#### **ValidateToken(token string) (*Payload, error)**
-
-Validates a token and returns its payload (username, expiration, etc.).
-
-- **Example**:
-    ```go
-    payload, err := tokenManager.ValidateToken(token)
-    if err != nil {
-        log.Fatal("Invalid token:", err)
-    }
-    ```
-
-### **Usage Example**
+### Example Usage (JWT)
 
 ```go
 package main
 
 import (
-    "log"
-    "github.com/yourusername/repositoryname/gophertoken"
-    "time"
+	"log"
+	"time"
+
+	"github.com/lordofthemind/mygopher/gophertoken"
 )
 
 func main() {
-    // Create a token manager (JWT)
-    tokenManager, err := gophertoken.NewTokenManager("jwt", "your-secret-key")
-    if err != nil {
-        log.Fatal("Error creating token manager:", err)
-    }
+	manager, err := gophertoken.NewTokenManager("jwt", "your-secret-key")
+	if err != nil {
+		log.Fatalf("Failed to create JWT manager: %v", err)
+	}
 
-    // Generate a token
-    token, err := tokenManager.GenerateToken("john_doe", time.Hour)
-    if err != nil {
-        log.Fatal("Error generating token:", err)
-    }
-    log.Println("Generated Token:", token)
+	token, err := manager.GenerateToken("user123", time.Hour)
+	if err != nil {
+		log.Fatalf("Failed to generate token: %v", err)
+	}
 
-    // Validate the token
-    payload, err := tokenManager.ValidateToken(token)
-    if err != nil {
-        log.Fatal("Error validating token:", err)
-    }
-    log.Println("Token valid for user:", payload.Username)
+	log.Println("Generated Token:", token)
+
+	payload, err := manager.ValidateToken(token)
+	if err != nil {
+		log.Fatalf("Failed to validate token: %v", err)
+	}
+
+	log.Printf("Token Payload: %+v\n", payload)
 }
 ```
 
 ---
 
-## **General Notes**
+### License
 
-- **Modular Design**: Each package in the repository is designed to be self-contained and reusable. This makes it easy to include them in various projects.
-- **Security**: Be
+This repository is licensed under the MIT License. See the [LICENSE](./LICENSE) file for more details.
 
- sure to use strong, unique secret keys in production environments for the `gophertoken` package.
-- **Usage Examples**: Each package includes a detailed usage example, which can be quickly referenced in your own applications.
+---
 
-By following this documentation, other developers can easily integrate and use the functionality provided by each package in your repository.
+### Contributing
+
+Feel free to contribute by submitting issues or pull requests.
+
+---
+
+This documentation provides a high-level overview and detailed usage examples for each package in the **MyGopher** repository. You can expand and adapt it as the project evolves!
