@@ -10,6 +10,35 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// ConnectPostgresDB connects to a PostgreSQL database using the sql package with retries.
+//
+// This function attempts to connect to a PostgreSQL database using the provided Data Source Name (DSN),
+// retrying the connection up to 'maxRetries' times. It uses a context with a timeout to ensure
+// that the connection does not hang indefinitely. If the connection is successful, it returns
+// a *sql.DB instance for database operations.
+//
+// Params:
+//
+//	ctx - The context for managing connection timeout and cancellation.
+//	dsn - The PostgreSQL connection string (Data Source Name).
+//	timeout - The timeout duration for the connection attempt.
+//	maxRetries - The maximum number of retries before giving up.
+//
+// Returns:
+//
+//	*sql.DB - The connected PostgreSQL database instance on success.
+//	error - An error message if the connection fails after the retries.
+//
+// Example usage:
+//
+//	ctx := context.Background()
+//	db, err := ConnectPostgresDB(ctx, "postgres://user:password@localhost:5432/mydb", 10*time.Second, 3)
+//	if err != nil {
+//	    log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+//	}
+//	defer db.Close()
+//
+// Once connected, you can perform SQL operations like querying or executing statements.
 func ConnectPostgresDB(ctx context.Context, dsn string, timeout time.Duration, maxRetries int) (*sql.DB, error) {
 	// Set a timeout for the connection operation using the context
 	ctx, cancel := context.WithTimeout(ctx, timeout)

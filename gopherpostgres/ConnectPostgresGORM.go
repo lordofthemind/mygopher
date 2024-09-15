@@ -10,7 +10,36 @@ import (
 	"gorm.io/gorm"
 )
 
-// ConnectToPostgresGORM attempts to connect to PostgreSQL using GORM with retries.
+// ConnectToPostgresGORM connects to a PostgreSQL database using GORM with retries.
+//
+// This function attempts to connect to a PostgreSQL database using the GORM ORM library.
+// It applies the provided DSN and tries to connect up to 'maxRetries' times. The function
+// also uses a context with a timeout to control how long the connection attempt lasts.
+// If successful, a *gorm.DB instance is returned, which allows performing ORM-based
+// operations.
+//
+// Params:
+//
+//	ctx - The context for managing connection timeout and cancellation.
+//	dsn - The PostgreSQL connection string (Data Source Name).
+//	timeout - The timeout duration for the connection attempt.
+//	maxRetries - The maximum number of retries before giving up.
+//
+// Returns:
+//
+//	*gorm.DB - The connected GORM PostgreSQL database instance on success.
+//	error - An error message if the connection fails after the retries.
+//
+// Example usage:
+//
+//	ctx := context.Background()
+//	db, err := ConnectToPostgresGORM(ctx, "postgres://user:password@localhost:5432/mydb", 10*time.Second, 3)
+//	if err != nil {
+//	    log.Fatalf("Failed to connect to PostgreSQL using GORM: %v", err)
+//	}
+//
+// Once connected, you can use GORM's ORM features for database operations like querying,
+// inserting, updating, and deleting records.
 func ConnectToPostgresGORM(ctx context.Context, dsn string, timeout time.Duration, maxRetries int) (*gorm.DB, error) {
 	// Set a timeout for the connection operation using the context
 	ctx, cancel := context.WithTimeout(ctx, timeout)
