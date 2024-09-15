@@ -10,7 +10,32 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// ConnectToMongoDB connects to MongoDB and returns the client.
+// ConnectToMongoDB establishes a connection to MongoDB with retries and a context timeout.
+//
+// This function attempts to connect to MongoDB using the provided connection string (DSN),
+// retrying the connection up to 'maxRetries' times with a delay of 5 seconds between retries.
+// It also applies a timeout to the entire connection attempt using the context.
+//
+// Params:
+//
+//	ctx - The context for connection management (with timeout support).
+//	dsn - The MongoDB connection string (Data Source Name).
+//	timeout - The timeout duration for the connection attempt.
+//	maxRetries - The maximum number of retries before giving up.
+//
+// Returns:
+//
+//	*mongo.Client - The connected MongoDB client instance on success.
+//	error - An error message if the connection fails.
+//
+// Example usage:
+//
+//	ctx := context.Background()
+//	client, err := ConnectToMongoDB(ctx, "mongodb://localhost:27017", 10*time.Second, 3)
+//	if err != nil {
+//	    log.Fatalf("Failed to connect to MongoDB: %v", err)
+//	}
+//	defer client.Disconnect(ctx)
 func ConnectToMongoDB(ctx context.Context, dsn string, timeout time.Duration, maxRetries int) (*mongo.Client, error) {
 	// Set a timeout for the connection operation using the context
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -48,9 +73,4 @@ func ConnectToMongoDB(ctx context.Context, dsn string, timeout time.Duration, ma
 
 	// Return error if all retries fail
 	return nil, fmt.Errorf("failed to connect to MongoDB after %d retries: %w", maxRetries, err)
-}
-
-// GetDatabase returns the MongoDB database instance for the given database name.
-func GetDatabase(client *mongo.Client, dbName string) *mongo.Database {
-	return client.Database(dbName)
 }
