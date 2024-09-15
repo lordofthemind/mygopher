@@ -1,7 +1,3 @@
-Here's the detailed documentation in markdown format for your repository, grouped by packages:
-
----
-
 # MyGopher
 
 **MyGopher** is a collection of utility packages written in Go, designed to simplify common tasks such as web server setup, middleware integration, database connections (MongoDB, PostgreSQL), and token management (JWT and Paseto). Each package is modular, allowing you to integrate them into your project as needed.
@@ -218,44 +214,45 @@ To be filled in once additional middleware features are added.
 
 ### About
 
-The `gophermongo` package simplifies the process of connecting to MongoDB, retrieving databases and collections. It supports connection retries and uses context for managing connection timeouts.
+The `gophermongo` package provides utilities to establish a connection to a MongoDB server, retrieve databases, and access collections. It supports connection retries, context-based timeouts, and simplified database and collection retrieval.
+
+This package is designed to handle common MongoDB operations with minimal configuration, allowing for easy integration with Go projects.
+
+### Installation
+
+To install and use the `gophermongo` package, run the following command:
+
+```bash
+go get github.com/lordofthemind/mygopher/gophermongo
+```
+
+After installation, import the package in your Go project:
+
+```go
+import "github.com/lordofthemind/mygopher/gophermongo"
+```
 
 ### Functions
 
 #### `ConnectToMongoDB(ctx, dsn, timeout, maxRetries)`
-Establishes a connection to MongoDB with retries and a context timeout.
+
+Establishes a connection to MongoDB with a specified context timeout and retry mechanism. The function attempts to connect up to `maxRetries` times, waiting 5 seconds between each retry.
 
 **Parameters:**
-- `ctx`: Context for connection management.
-- `dsn`: MongoDB connection string (Data Source Name).
-- `timeout`: Duration for the connection attempt.
-- `maxRetries`: Maximum number of retries before giving up.
+- `ctx`: Context for managing the connection timeout.
+- `dsn`: The MongoDB connection string (Data Source Name).
+- `timeout`: Duration for the connection timeout (e.g., `10*time.Second`).
+- `maxRetries`: Maximum number of retries before returning an error.
 
 **Returns:**
 - `*mongo.Client`: The connected MongoDB client instance on success.
 - `error`: An error if the connection fails.
 
-#### `GetDatabase(client, dbName)`
-Retrieves a specified MongoDB database instance from the client.
+**Details:**
+- The function will retry the connection in case of failure up to the specified number of retries (`maxRetries`).
+- If a connection cannot be established within the provided `timeout`, it will return an error indicating the context has timed out.
 
-**Parameters:**
-- `client`: MongoDB client instance.
-- `dbName`: Name of the database to retrieve.
-
-**Returns:**
-- `*mongo.Database`: The MongoDB database instance.
-
-#### `GetCollection(db, collectionName)`
-Retrieves a specified MongoDB collection from the database.
-
-**Parameters:**
-- `db`: MongoDB database instance.
-- `collectionName`: Name of the collection to retrieve.
-
-**Returns:**
-- `*mongo.Collection`: The MongoDB collection instance.
-
-### Example Usage
+**Example Usage:**
 
 ```go
 package main
@@ -276,12 +273,88 @@ func main() {
 	}
 	defer client.Disconnect(ctx)
 
-	database := gophermongo.GetDatabase(client, "myDatabase")
-	collection := gophermongo.GetCollection(database, "myCollection")
-	// Use collection for CRUD operations...
+	// Now you can use the client to interact with the database
 }
 ```
 
+---
+
+#### `GetDatabase(client, dbName)`
+
+Retrieves a specified MongoDB database instance from the connected client.
+
+**Parameters:**
+- `client`: The MongoDB client instance.
+- `dbName`: The name of the database to retrieve.
+
+**Returns:**
+- `*mongo.Database`: The MongoDB database instance.
+
+**Details:**
+- Use this function to retrieve a database once you have successfully connected to MongoDB.
+
+**Example Usage:**
+
+```go
+database := gophermongo.GetDatabase(client, "myDatabase")
+```
+
+---
+
+#### `GetCollection(db, collectionName)`
+
+Retrieves a specified MongoDB collection from the given database.
+
+**Parameters:**
+- `db`: The MongoDB database instance.
+- `collectionName`: The name of the collection to retrieve.
+
+**Returns:**
+- `*mongo.Collection`: The MongoDB collection instance.
+
+**Details:**
+- Once you have a collection, you can perform CRUD operations on it (insert, find, update, delete).
+
+**Example Usage:**
+
+```go
+collection := gophermongo.GetCollection(database, "myCollection")
+```
+
+---
+
+### Example Usage (Full)
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/lordofthemind/mygopher/gophermongo"
+)
+
+func main() {
+	// Set up context and connection parameters
+	ctx := context.Background()
+	client, err := gophermongo.ConnectToMongoDB(ctx, "mongodb://localhost:27017", 10*time.Second, 3)
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
+	}
+	defer client.Disconnect(ctx)
+
+	// Get the database
+	database := gophermongo.GetDatabase(client, "myDatabase")
+
+	// Get the collection
+	collection := gophermongo.GetCollection(database, "myCollection")
+
+	// Now you can use the collection for CRUD operations
+	// Example: collection.InsertOne(ctx, document)
+}
+```
 ---
 
 ## GopherPostgres
@@ -290,37 +363,43 @@ func main() {
 
 ### About
 
-The `gopherpostgres` package helps in connecting to PostgreSQL using either the standard SQL driver or GORM (an ORM library). It includes retry logic and context-based timeouts for connection management.
+The `gopherpostgres` package facilitates connecting to PostgreSQL databases using either the standard SQL package or GORM (an ORM library). It includes retry logic and context-based timeouts, making it resilient and flexible for production use. This package provides functions to connect using raw SQL (`*sql.DB`) or GORM (`*gorm.DB`), making it easy to integrate with both standard and ORM-based database interactions.
+
+### Installation
+
+To install and use the `gopherpostgres` package, run the following command:
+
+```bash
+go get github.com/lordofthemind/mygopher/gopherpostgres
+```
+
+Then, import the package in your Go project:
+
+```go
+import "github.com/lordofthemind/mygopher/gopherpostgres"
+```
 
 ### Functions
 
 #### `ConnectPostgresDB(ctx, dsn, timeout, maxRetries)`
-Connects to a PostgreSQL database using the standard SQL package with retries.
+
+Connects to a PostgreSQL database using the standard SQL driver. The function includes retry logic, which attempts to reconnect in case of failure up to the specified number of retries.
 
 **Parameters:**
-- `ctx`: Context for connection management.
+- `ctx`: Context for managing connection timeout and cancellation.
 - `dsn`: PostgreSQL connection string (Data Source Name).
-- `timeout`: Duration for the connection attempt.
-- `maxRetries`: Maximum number of retries before giving up.
+- `timeout`: Duration for the connection attempt (e.g., `10*time.Second`).
+- `maxRetries`: Maximum number of retries before returning an error.
 
 **Returns:**
-- `*sql.DB`: The connected PostgreSQL database instance.
-- `error`: An error if the connection fails.
+- `*sql.DB`: The connected PostgreSQL database instance on success.
+- `error`: An error if the connection fails after all retries.
 
-#### `ConnectToPostgresGORM(ctx, dsn, timeout, maxRetries)`
-Connects to a PostgreSQL database using GORM with retries.
+**Details:**
+- If the connection attempt fails, the function will retry up to `maxRetries` times, with a 5-second delay between each retry.
+- The function utilizes `sql.Open` and `db.PingContext` to ensure a valid connection is established.
 
-**Parameters:**
-- `ctx`: Context for connection management.
-- `dsn`: PostgreSQL connection string (Data Source Name).
-- `timeout`: Duration for the connection attempt.
-- `maxRetries`: Maximum number of retries before giving up.
-
-**Returns:**
-- `*gorm.DB`: The connected GORM PostgreSQL database instance.
-- `error`: An error if the connection fails.
-
-### Example Usage
+**Example Usage:**
 
 ```go
 package main
@@ -341,11 +420,92 @@ func main() {
 	}
 	defer db.Close()
 
-	// Use db for SQL operations...
+	// Perform SQL operations
+	// Example: db.QueryContext(ctx, "SELECT * FROM users")
 }
 ```
 
 ---
+
+#### `ConnectToPostgresGORM(ctx, dsn, timeout, maxRetries)`
+
+Connects to a PostgreSQL database using GORM. Similar to the raw SQL connection, this function includes retry logic and context-based timeouts to manage the connection lifecycle.
+
+**Parameters:**
+- `ctx`: Context for managing connection timeout and cancellation.
+- `dsn`: PostgreSQL connection string (Data Source Name).
+- `timeout`: Duration for the connection attempt (e.g., `10*time.Second`).
+- `maxRetries`: Maximum number of retries before returning an error.
+
+**Returns:**
+- `*gorm.DB`: The connected GORM PostgreSQL database instance on success.
+- `error`: An error if the connection fails after all retries.
+
+**Details:**
+- This function leverages GORM's `gorm.Open` to establish a connection using PostgreSQL. 
+- If the connection fails, it retries up to `maxRetries` times with a 5-second delay between each retry.
+- Ideal for projects using an ORM for database operations.
+
+**Example Usage:**
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/lordofthemind/mygopher/gopherpostgres"
+	"gorm.io/gorm"
+)
+
+func main() {
+	ctx := context.Background()
+	db, err := gopherpostgres.ConnectToPostgresGORM(ctx, "postgres://user:password@localhost:5432/mydb", 10*time.Second, 3)
+	if err != nil {
+		log.Fatalf("Failed to connect to PostgreSQL using GORM: %v", err)
+	}
+
+	// Use GORM for ORM-based database operations
+	// Example: db.Find(&users)
+}
+```
+
+---
+
+### Example Usage (Full)
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/lordofthemind/mygopher/gopherpostgres"
+)
+
+func main() {
+	ctx := context.Background()
+
+	// Using standard SQL driver
+	dbSQL, err := gopherpostgres.ConnectPostgresDB(ctx, "postgres://user:password@localhost:5432/mydb", 10*time.Second, 3)
+	if err != nil {
+		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+	}
+	defer dbSQL.Close()
+
+	// Using GORM
+	dbGORM, err := gopherpostgres.ConnectToPostgresGORM(ctx, "postgres://user:password@localhost:5432/mydb", 10*time.Second, 3)
+	if err != nil {
+		log.Fatalf("Failed to connect to PostgreSQL using GORM: %v", err)
+	}
+
+	// Perform operations with dbSQL or dbGORM
+}
+```
 
 ## GopherToken
 
@@ -353,40 +513,127 @@ func main() {
 
 ### About
 
-The `gophertoken` package provides an interface and implementations for JWT and Paseto token creation and validation. It includes a payload structure and methods for generating tokens with expiration and validating them.
+The `gophertoken` package provides a framework for token management using JWT and Paseto, supporting token generation and validation with expiration logic. It offers interfaces for both types and implements payload structures, allowing developers to manage token-based authentication.
 
-### Functions
+### Payload Structure
 
-#### `NewTokenManager(tokenType, secretKey)`
-Creates a new token manager (JWT or Paseto) depending on the provided type.
+#### `Payload`
+Represents the token's claims, containing user information and expiration details.
 
-**Parameters:**
-- `tokenType`: Either "jwt" or "paseto".
-- `secretKey`: Secret key for signing tokens.
+**Fields:**
+- `ID`: A unique token ID (`uuid.UUID`).
+- `Username`: The username associated with the token.
+- `IssuedAt`: The time when the token was issued.
+- `ExpiredAt`: The expiration time of the token.
 
-**Returns:**
-- `TokenManager`: An instance of the token manager.
+### Errors
+- `ErrInvalidToken`: Indicates that the token is invalid.
+- `ErrExpiredToken`: Indicates that the token has expired.
 
-#### `GenerateToken(username, duration)`
-Generates a token for a given user and duration.
+### Methods
+
+#### `NewPayload(username, duration)`
+Creates a new `Payload` for a given user and token duration.
 
 **Parameters:**
 - `username`: The username for the token.
-- `duration`: The token's validity duration.
+- `duration`: Token validity period (e.g., 1 hour).
 
 **Returns:**
-- `string`: The generated token.
-- `error`: An error if token generation fails.
+- `*Payload`: The payload object containing user information and expiration data.
+- `error`: If there's an issue during payload creation.
 
-#### `ValidateToken(token)`
-Validates the given token and returns the payload.
+#### `Valid()`
+Validates if the token has expired.
+
+**Returns:**
+- `error`: `ErrExpiredToken` if the token is expired, or `nil` if valid.
+
+### TokenManager Interface
+
+#### `TokenManager`
+Interface for token operations like generation and validation, supporting JWT and Paseto tokens.
+
+**Methods:**
+- `GenerateToken(username string, duration time.Duration) (string, error)`: Generates a token.
+- `ValidateToken(token string) (*Payload, error)`: Validates a token and returns its payload.
+
+### Implementations
+
+#### `NewTokenManager(tokenType, secretKey)`
+Instantiates a new `TokenManager` based on the provided token type (`"jwt"` or `"paseto"`) and a secret key.
 
 **Parameters:**
-- `token`: The token to validate.
+- `tokenType`: Either `"jwt"` or `"paseto"`.
+- `secretKey`: The secret key used for signing the token.
 
 **Returns:**
-- `*Payload`: The decoded token payload.
-- `error`: An error if token validation fails.
+- `TokenManager`: A token manager that supports the specified token type.
+- `error`: If the token type is unsupported or the secret key is invalid.
+
+---
+
+### JWT Implementation
+
+#### `JWTMaker`
+Handles JWT token creation and validation.
+
+##### `NewJWTMaker(secretKey)`
+Creates a new `JWTMaker` for JWT tokens.
+
+**Parameters:**
+- `secretKey`: Secret key for signing JWTs.
+
+**Returns:**
+- `*JWTMaker`: The JWT manager.
+- `error`: If the secret key is invalid.
+
+##### `GenerateToken(username, duration)`
+Generates a JWT with a specific username and duration.
+
+**Returns:**
+- `string`: The JWT as a string.
+- `error`: If there's an error during token generation.
+
+##### `ValidateToken(tokenString)`
+Validates the JWT and returns its payload.
+
+**Returns:**
+- `*Payload`: The token's payload.
+- `error`: If the token is invalid or expired.
+
+---
+
+### Paseto Implementation
+
+#### `PasetoMaker`
+Handles Paseto token creation and validation.
+
+##### `NewPasetoMaker(secretKey)`
+Creates a new `PasetoMaker` for Paseto tokens.
+
+**Parameters:**
+- `secretKey`: Symmetric key for Paseto (must be 32 bytes).
+
+**Returns:**
+- `*PasetoMaker`: The Paseto manager.
+- `error`: If the secret key is invalid.
+
+##### `GenerateToken(username, duration)`
+Generates a Paseto token with a specific username and duration.
+
+**Returns:**
+- `string`: The Paseto token.
+- `error`: If token generation fails.
+
+##### `ValidateToken(token)`
+Validates the Paseto token and returns its payload.
+
+**Returns:**
+- `*Payload`: The token's payload.
+- `error`: If the token is invalid or expired.
+
+---
 
 ### Example Usage (JWT)
 
@@ -426,14 +673,40 @@ func main() {
 
 ### License
 
-This repository is licensed under the MIT License. See the [LICENSE](./LICENSE) file for more details.
+This repository is licensed under the MIT License. The full text of the license is as follows:
+
+---
+
+**MIT License**
+
+Copyright (c) 2024 Manish Kumar
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
 ### Contributing
 
-Feel free to contribute by submitting issues or pull requests.
+We welcome contributions to the **MyGopher** repository. To contribute:
+
+1. **Report Issues**: If you find any bugs or have feature requests, please open an issue on the [GitHub Issues page](#).
+2. **Submit Pull Requests**: For code contributions, fork the repository, make your changes, and submit a pull request. Ensure your changes adhere to the existing code style and include appropriate tests if applicable.
+
+Please follow our [contributing guidelines](#) to ensure a smooth collaboration process.
 
 ---
 
-This documentation provides a high-level overview and detailed usage examples for each package in the **MyGopher** repository. You can expand and adapt it as the project evolves!
+### Documentation Overview
+
+This documentation provides a comprehensive overview and detailed usage examples for each package within the **MyGopher** repository. It is intended to help developers understand the functionalities of the packages and how to integrate them into their projects effectively. The documentation is organized as follows:
+
+- **gophergin**: Setup and configuration of the Gin server with optional CORS and TLS support.
+- **gophermongo**: Utilities for connecting to MongoDB, accessing collections, and managing databases.
+- **gopherpostgres**: Tools for connecting to PostgreSQL using both `database/sql` and GORM.
+- **gophertoken**: Token management utilities including JWT and Paseto implementations.
+
+As the project evolves, this documentation will be updated with new features, changes, and best practices. Feel free to contribute suggestions and improvements.
