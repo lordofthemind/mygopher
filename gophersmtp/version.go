@@ -1,7 +1,7 @@
 package gophersmtp
 
 // Version of the gophersmtp package
-const Version = "1.0.1"
+const Version = "1.0.2"
 
 // Author of the gophersmtp package
 const Author = "github.com/lordofthemind"
