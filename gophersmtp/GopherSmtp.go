@@ -1,5 +1,3 @@
-// Package gophersmtp provides a versatile SMTP email service with support for plain text, HTML, attachments,
-// CC/BCC, scheduling, tracking, and more. It simplifies sending various types of emails through SMTP.
 package gophersmtp
 
 import (
@@ -10,6 +8,7 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -28,7 +27,7 @@ type EmailService struct {
 // - smtpPort: The port of the SMTP server.
 // - username: The sender's email address.
 // - password: The sender's email account password (used for authentication).
-func NewEmailService(smtpHost, smtpPort, username, password string) EmailServiceInterface {
+func NewEmailService(smtpHost, smtpPort, username, password string) GopherSmtpInterface {
 	return &EmailService{
 		smtpHost: smtpHost,
 		smtpPort: smtpPort,
@@ -37,270 +36,332 @@ func NewEmailService(smtpHost, smtpPort, username, password string) EmailService
 	}
 }
 
-// SendTextEmail sends a plain text email to the specified recipients.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The plain text body of the email.
-func (es *EmailService) SendTextEmail(to []string, subject, body string) error {
-	return es.sendMail(to, subject, body, "text/plain")
+// SendEmail sends an email to the recipients. The isHtml flag determines whether it's text or HTML.
+//
+// This function composes and sends a basic email to the specified recipients. It can send both plain
+// text and HTML emails based on the `isHtml` flag.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
+func (e *EmailService) SendEmail(to []string, subject, body string, isHtml bool) error {
+	mime := "text/plain"
+	if isHtml {
+		mime = "text/html"
+	}
+	msg := fmt.Sprintf("Subject: %s\r\nMIME-version: 1.0;\r\nContent-Type: %s; charset=\"UTF-8\";\r\n\r\n%s", subject, mime, body)
+
+	return smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, []byte(msg))
 }
 
-// SendHTMLEmail sends an HTML email to the specified recipients.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The HTML body of the email.
-func (es *EmailService) SendHTMLEmail(to []string, subject, body string) error {
-	return es.sendMail(to, subject, body, "text/html")
+// SendEmailWithAttachments sends an email with attachments. The isHtml flag determines text or HTML format.
+//
+// This function attaches one or more files to the email and sends it to the recipients. The email can be
+// either plain text or HTML based on the `isHtml` flag.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - attachmentPaths: A list of file paths for the attachments.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
+func (e *EmailService) SendEmailWithAttachments(to []string, subject, body string, attachmentPaths []string, isHtml bool) error {
+	mime := "text/plain"
+	if isHtml {
+		mime = "text/html"
+	}
+
+	// Create email body
+	var buffer bytes.Buffer
+	writer := multipart.NewWriter(&buffer)
+
+	// Set headers
+	headers := fmt.Sprintf("Subject: %s\r\nMIME-version: 1.0;\r\nContent-Type: multipart/mixed; boundary=%s\r\n", subject, writer.Boundary())
+	buffer.Write([]byte(headers))
+
+	// Add body part
+	bodyPart, _ := writer.CreatePart(map[string][]string{
+		"Content-Type": {mime + "; charset=\"UTF-8\""},
+	}[0])
+	bodyPart.Write([]byte(body))
+
+	// Attach files
+	for _, path := range attachmentPaths {
+		err := e.attachFile(writer, path)
+		if err != nil {
+			return err
+		}
+	}
+	writer.Close()
+
+	// Send the email
+	return smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
 }
 
-// SendEmailWithAttachment sends an email with a single attachment.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email (plain text or HTML).
-// - attachmentPath: The file path of the attachment to be included in the email.
-func (es *EmailService) SendEmailWithAttachment(to []string, subject, body, attachmentPath string) error {
-	return es.sendEmailWithAttachmentHelper(to, subject, body, []string{attachmentPath})
+// SendEmailWithInLineImages sends an email with inline images only. The isHtml flag determines text or HTML format.
+//
+// This function allows embedding images directly into the email content. The email can either be
+// plain text or HTML based on the `isHtml` flag.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - inlineImagePaths: A list of file paths for the inline images.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
+func (e *EmailService) SendEmailWithInLineImages(to []string, subject, body string, inlineImagePaths []string) error {
+	mime := "text/html"
+
+	// Create email body
+	var buffer bytes.Buffer
+	writer := multipart.NewWriter(&buffer)
+
+	// Set headers
+	headers := fmt.Sprintf("Subject: %s\r\nMIME-version: 1.0;\r\nContent-Type: multipart/related; boundary=%s\r\n", subject, writer.Boundary())
+	buffer.Write([]byte(headers))
+
+	// Add body part
+	bodyPart, _ := writer.CreatePart(map[string][]string{
+		"Content-Type": {mime + "; charset=\"UTF-8\""},
+	}[0])
+	bodyPart.Write([]byte(body))
+
+	// Attach inline images
+	for _, path := range inlineImagePaths {
+		err := e.attachInlineImage(writer, path)
+		if err != nil {
+			return err
+		}
+	}
+	writer.Close()
+
+	// Send the email
+	return smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
 }
 
-// SendEmailWithMultipleAttachments sends an email with multiple attachments.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email (plain text or HTML).
-// - attachmentPaths: A list of file paths of the attachments to be included.
-func (es *EmailService) SendEmailWithMultipleAttachments(to []string, subject, body string, attachmentPaths []string) error {
-	return es.sendEmailWithAttachmentHelper(to, subject, body, attachmentPaths)
-}
+// SendEmailWithHeaders sends an email with custom headers. The isHtml flag determines text or HTML format.
+//
+// This function allows setting custom headers such as priority, tracking, and metadata. The email can
+// either be plain text or HTML based on the `isHtml` flag.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - headers: A map of custom headers.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
+func (e *EmailService) SendEmailWithHeaders(to []string, subject, body string, headers map[string]string, isHtml bool) error {
+	mime := "text/plain"
+	if isHtml {
+		mime = "text/html"
+	}
 
-// SendEmailWithInlineImages sends an email with inline images, typically used in HTML emails.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email (HTML format).
-// - imagePaths: A list of image file paths to be embedded as inline images.
-func (es *EmailService) SendEmailWithInlineImages(to []string, subject, body string, imagePaths []string) error {
-	// Inline images are treated as attachments with specific Content-ID headers.
-	return es.sendEmailWithAttachmentHelper(to, subject, body, imagePaths)
-}
-
-// SendEmailWithCCAndBCC sends an email with CC and BCC recipients.
-// Parameters:
-// - to: List of primary recipient email addresses.
-// - cc: List of email addresses to be CC'd.
-// - bcc: List of email addresses to be BCC'd.
-// - subject: The subject of the email.
-// - body: The body of the email.
-func (es *EmailService) SendEmailWithCCAndBCC(to []string, cc []string, bcc []string, subject, body string) error {
-	// Combine 'to', 'cc', and 'bcc' into one list of recipients.
-	recipients := append(to, append(cc, bcc...)...)
-	return es.sendMail(recipients, subject, body, "text/plain")
-}
-
-// SendEmailWithHeaders sends an email with custom headers.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email (plain text or HTML).
-// - headers: A map of custom headers to include in the email.
-func (es *EmailService) SendEmailWithHeaders(to []string, subject, body string, headers map[string]string) error {
-	// Build the email message with custom headers.
-	var msg bytes.Buffer
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	// Compose custom headers
+	headerText := ""
 	for key, value := range headers {
-		msg.WriteString(fmt.Sprintf("%s: %s\r\n", key, value))
+		headerText += fmt.Sprintf("%s: %s\r\n", key, value)
 	}
-	msg.WriteString("\r\n" + body)
-	return es.send(msg.Bytes(), to)
+
+	// Complete message
+	msg := fmt.Sprintf("%sSubject: %s\r\nMIME-version: 1.0;\r\nContent-Type: %s; charset=\"UTF-8\";\r\n\r\n%s", headerText, subject, mime, body)
+
+	// Send email
+	return smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, []byte(msg))
 }
 
-// SendPriorityEmail sends an email with a priority level by adding the "X-Priority" header.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email (plain text or HTML).
-// - priority: The priority level (e.g., "1" for high, "3" for normal, "5" for low).
-func (es *EmailService) SendPriorityEmail(to []string, subject, body string, priority string) error {
-	headers := map[string]string{
-		"X-Priority": priority,
-	}
-	return es.SendEmailWithHeaders(to, subject, body, headers)
-}
-
-// ScheduleEmail schedules an email to be sent at a specific time in the future.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email.
-// - sendAt: The time when the email should be sent.
-func (es *EmailService) ScheduleEmail(to []string, subject, body string, sendAt time.Time) error {
-	// Calculate the duration to wait until sendAt
-	duration := time.Until(sendAt)
-	if duration <= 0 {
-		// If sendAt is in the past or now, send immediately
-		return es.SendTextEmail(to, subject, body)
+// ScheduleEmail schedules an email to be sent at a specific time. The isHtml flag determines text or HTML format.
+//
+// This function schedules the email to be sent at a specific time using a goroutine and timer to delay
+// execution.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - sendAt: The time when the email should be sent.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the scheduling fails.
+func (e *EmailService) ScheduleEmail(to []string, subject, body string, sendAt time.Time, isHtml bool) error {
+	delay := time.Until(sendAt)
+	if delay <= 0 {
+		return fmt.Errorf("scheduled time is in the past")
 	}
 
-	// Use a goroutine to handle the delay without blocking
-	go func() error {
-		time.Sleep(duration)
-		return es.SendTextEmail(to, subject, body)
+	go func() {
+		time.Sleep(delay)
+		e.SendEmail(to, subject, body, isHtml)
 	}()
 
 	return nil
 }
 
-// SendEmailWithReplyTo sends an email with a "Reply-To" header to allow replies to a specific address.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email.
-// - replyTo: The email address for the "Reply-To" header.
-func (es *EmailService) SendEmailWithReplyTo(to []string, subject, body, replyTo string) error {
-	headers := map[string]string{
-		"Reply-To": replyTo,
+// SendEmailWithCCAndBCC sends an email with CC and BCC recipients. The isHtml flag determines text or HTML format.
+//
+// This function sends an email with additional CC and BCC recipients. Both CC and BCC lists are supported
+// to allow visibility and hidden recipients.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - cc: A list of CC recipient email addresses.
+//   - bcc: A list of BCC recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
+func (e *EmailService) SendEmailWithCCAndBCC(to, cc, bcc []string, subject, body string, isHtml bool) error {
+	mime := "text/plain"
+	if isHtml {
+		mime = "text/html"
 	}
-	return es.SendEmailWithHeaders(to, subject, body, headers)
+
+	// Merge recipients
+	allRecipients := append(to, cc...)
+	allRecipients = append(allRecipients, bcc...)
+
+	// Construct headers
+	ccHeader := strings.Join(cc, ",")
+	bccHeader := strings.Join(bcc, ",")
+	headers := fmt.Sprintf("Subject: %s\r\nCC: %s\r\nBCC: %s\r\nMIME-version: 1.0;\r\nContent-Type: %s; charset=\"UTF-8\";\r\n\r\n%s", subject, ccHeader, bccHeader, mime, body)
+
+	// Send email
+	return smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, allRecipients, []byte(headers))
 }
 
-// SendBatchEmail sends the same email to a batch of recipients.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email.
-func (es *EmailService) SendBatchEmail(to []string, subject, body string) error {
-	// Sends email to each recipient one at a time.
+// SendBulkEmail sends bulk emails. The isHtml flag determines text or HTML format.
+//
+// This function is designed for sending the same email to multiple recipients in bulk.
+// It can handle plain text and HTML emails based on the `isHtml` flag.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the bulk email fails to send.
+func (e *EmailService) SendBulkEmail(to []string, subject, body string, isHtml bool) error {
 	for _, recipient := range to {
-		err := es.SendTextEmail([]string{recipient}, subject, body)
-		if err != nil {
+		if err := e.SendEmail([]string{recipient}, subject, body, isHtml); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// SendEmailWithTracking sends an email with tracking features by adding a tracking ID in the email body.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email.
-// - trackingID: A tracking identifier (e.g., for marketing emails).
-func (es *EmailService) SendEmailWithTracking(to []string, subject, body string, trackingID string) error {
-	// Append the tracking ID to the body of the email.
-	trackedBody := fmt.Sprintf("%s\n\nTracking ID: %s", body, trackingID)
-	return es.SendTextEmail(to, subject, trackedBody)
-}
+// SendEmailWithAttachmentsAndInLineImages sends an email with both attachments and inline images.
+//
+// This function combines attachments and inline images into a single email. It supports sending
+// both plain text and HTML content, and allows the inclusion of image references in the email body.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - attachmentPaths: A list of file paths for the attachments.
+//   - inlineImagePaths: A list of file paths for the inline images.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
+func (e *EmailService) SendEmailWithAttachmentsAndInLineImages(to []string, subject, body string, attachmentPaths []string, inlineImagePaths []string) error {
+	mime := "text/html"
 
-// SendEmailWithAttachmentsAndInlineImages sends an email with both attachments and inline images.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email (HTML format).
-// - attachmentPaths: A list of file paths of the attachments to be included.
-// - imagePaths: A list of image file paths to be embedded as inline images.
-func (es *EmailService) SendEmailWithAttachmentsAndInlineImages(to []string, subject, body string, attachmentPaths, imagePaths []string) error {
-	// Send email with combined attachments and inline images.
-	return es.sendEmailWithAttachmentHelper(to, subject, body, append(attachmentPaths, imagePaths...))
-}
-
-// sendMail is a helper function to send plain text or HTML emails.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email (plain text or HTML).
-// - contentType: The content type of the email (e.g., text/plain or text/html).
-func (es *EmailService) sendMail(to []string, subject, body, contentType string) error {
-	msg := []byte(fmt.Sprintf("Subject: %s\r\nMIME-Version: 1.0\r\nContent-Type: %s; charset=\"utf-8\"\r\n\r\n%s",
-		subject, contentType, body))
-	return es.send(msg, to)
-}
-
-// send is a helper function to actually send the final email message using the SMTP server.
-// Parameters:
-// - msg: The complete email message as bytes.
-// - to: List of recipient email addresses.
-func (es *EmailService) send(msg []byte, to []string) error {
-	auth := smtp.PlainAuth("", es.username, es.password, es.smtpHost)
-	return smtp.SendMail(es.smtpHost+":"+es.smtpPort, auth, es.username, to, msg)
-}
-
-// sendEmailWithAttachmentHelper is a helper function to send emails with attachments.
-// It encodes files as Base64 before sending.
-// Parameters:
-// - to: List of recipient email addresses.
-// - subject: The subject of the email.
-// - body: The body of the email (plain text or HTML).
-// - attachmentPaths: A list of file paths of the attachments to be included.
-func (es *EmailService) sendEmailWithAttachmentHelper(to []string, subject, body string, attachmentPaths []string) error {
+	// Create email body
 	var buffer bytes.Buffer
 	writer := multipart.NewWriter(&buffer)
 
-	// Email headers
-	boundary := writer.Boundary()
-	buffer.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
-	buffer.WriteString(fmt.Sprintf("MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%s\r\n\r\n", boundary))
+	// Set headers
+	headers := fmt.Sprintf("Subject: %s\r\nMIME-version: 1.0;\r\nContent-Type: multipart/related; boundary=%s\r\n", subject, writer.Boundary())
+	buffer.Write([]byte(headers))
 
-	// Add plain text or HTML body part
-	var contentType string
-	if isHTML(body) {
-		contentType = "text/html"
-	} else {
-		contentType = "text/plain"
-	}
-	bodyPartHeader := map[string][]string{
-		"Content-Type": {fmt.Sprintf("%s; charset=\"utf-8\"", contentType)},
-	}
-	bodyPart, err := writer.CreatePart(bodyPartHeader)
-	if err != nil {
-		return err
-	}
-	_, err = bodyPart.Write([]byte(body))
-	if err != nil {
-		return err
-	}
+	// Add body part
+	bodyPart, _ := writer.CreatePart(map[string][]string{
+		"Content-Type": {mime + "; charset=\"UTF-8\""},
+	}[0])
+	bodyPart.Write([]byte(body))
 
-	// Attach each file in the attachmentPaths
-	for _, attachmentPath := range attachmentPaths {
-		fileContent, err := es.readFileAndEncodeBase64(attachmentPath)
-		if err != nil {
-			return err
-		}
-		attachmentPartHeader := map[string][]string{
-			"Content-Type":              {fmt.Sprintf("application/octet-stream; name=\"%s\"", filepath.Base(attachmentPath))},
-			"Content-Disposition":       {fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(attachmentPath))},
-			"Content-Transfer-Encoding": {"base64"},
-		}
-		attachmentPart, err := writer.CreatePart(attachmentPartHeader)
-		if err != nil {
-			return err
-		}
-		_, err = attachmentPart.Write([]byte(fileContent))
+	// Attach inline images
+	for _, path := range inlineImagePaths {
+		err := e.attachInlineImage(writer, path)
 		if err != nil {
 			return err
 		}
 	}
 
+	// Attach other files
+	for _, path := range attachmentPaths {
+		err := e.attachFile(writer, path)
+		if err != nil {
+			return err
+		}
+	}
 	writer.Close()
 
-	// Send the final email
-	return es.send(buffer.Bytes(), to)
+	// Send the email
+	return smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
 }
 
-// readFileAndEncodeBase64 is a helper function to read a file and return its content encoded in Base64 format.
-// Parameters:
-// - filePath: The path to the file.
-func (es *EmailService) readFileAndEncodeBase64(filePath string) (string, error) {
-	fileData, err := os.ReadFile(filePath)
+// Helper function to attach a file to the email.
+func (e *EmailService) attachFile(writer *multipart.Writer, filePath string) error {
+	file, err := os.Open(filePath)
 	if err != nil {
-		return "", err
+		return err
 	}
-	return base64.StdEncoding.EncodeToString(fileData), nil
+	defer file.Close()
+
+	part, err := writer.CreateFormFile("attachment", filepath.Base(filePath))
+	if err != nil {
+		return err
+	}
+
+	_, err = part.Write([]byte(filePath))
+	return err
 }
 
-// isHTML is a helper function to determine if the email body is HTML.
-// It checks for the presence of HTML tags.
-func isHTML(body string) bool {
-	return bytes.Contains([]byte(body), []byte("<html>")) || bytes.Contains([]byte(body), []byte("<HTML>"))
+// Helper function to attach an inline image to the email.
+func (e *EmailService) attachInlineImage(writer *multipart.Writer, imagePath string) error {
+	file, err := os.Open(imagePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Get the file's MIME type
+	mimeType := "image/" + strings.TrimPrefix(filepath.Ext(imagePath), ".")
+	partHeader := make(map[string][]string)
+	partHeader["Content-Type"] = []string{mimeType}
+	partHeader["Content-Transfer-Encoding"] = []string{"base64"}
+	partHeader["Content-Disposition"] = []string{`inline; filename="` + filepath.Base(imagePath) + `";`}
+	partHeader["Content-ID"] = []string{`<` + filepath.Base(imagePath) + `>`}
+
+	part, err := writer.CreatePart(partHeader)
+	if err != nil {
+		return err
+	}
+
+	// Read the image and encode it in base64
+	imageData := make([]byte, base64.StdEncoding.EncodedLen(len(imagePath)))
+	base64.StdEncoding.Encode(imageData, []byte(imagePath))
+
+	_, err = part.Write(imageData)
+	return err
 }
