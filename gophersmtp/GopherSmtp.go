@@ -79,7 +79,6 @@ func (e *EmailService) SendEmailWithAttachments(to []string, subject, body strin
 		mime = "text/html"
 	}
 
-	// Create email body
 	var buffer bytes.Buffer
 	writer := multipart.NewWriter(&buffer)
 
@@ -88,9 +87,12 @@ func (e *EmailService) SendEmailWithAttachments(to []string, subject, body strin
 	buffer.Write([]byte(headers))
 
 	// Add body part
-	bodyPart, _ := writer.CreatePart(map[string][]string{
+	bodyPart, err := writer.CreatePart(map[string][]string{
 		"Content-Type": {mime + "; charset=\"UTF-8\""},
-	}[0])
+	})
+	if err != nil {
+		return err
+	}
 	bodyPart.Write([]byte(body))
 
 	// Attach files
@@ -106,7 +108,7 @@ func (e *EmailService) SendEmailWithAttachments(to []string, subject, body strin
 	return smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
 }
 
-// SendEmailWithInLineImages sends an email with inline images only. The isHtml flag determines text or HTML format.
+// SendEmailWithInLineImages sends an email with inline images only.
 //
 // This function allows embedding images directly into the email content. The email can either be
 // plain text or HTML based on the `isHtml` flag.
@@ -116,12 +118,11 @@ func (e *EmailService) SendEmailWithAttachments(to []string, subject, body strin
 //   - subject: The subject of the email.
 //   - body: The content of the email.
 //   - inlineImagePaths: A list of file paths for the inline images.
-//   - isHtml: A flag indicating whether the email should be sent in HTML format.
 //
 // Returns:
 //   - error: An error message if the email fails to send.
 func (e *EmailService) SendEmailWithInLineImages(to []string, subject, body string, inlineImagePaths []string) error {
-	mime := "text/html"
+	mime := "text/html" // If you want to send HTML, else set to "text/plain"
 
 	// Create email body
 	var buffer bytes.Buffer
@@ -132,9 +133,12 @@ func (e *EmailService) SendEmailWithInLineImages(to []string, subject, body stri
 	buffer.Write([]byte(headers))
 
 	// Add body part
-	bodyPart, _ := writer.CreatePart(map[string][]string{
+	bodyPart, err := writer.CreatePart(map[string][]string{
 		"Content-Type": {mime + "; charset=\"UTF-8\""},
-	}[0])
+	})
+	if err != nil {
+		return err
+	}
 	bodyPart.Write([]byte(body))
 
 	// Attach inline images
@@ -278,25 +282,26 @@ func (e *EmailService) SendBulkEmail(to []string, subject, body string, isHtml b
 //   - body: The content of the email.
 //   - attachmentPaths: A list of file paths for the attachments.
 //   - inlineImagePaths: A list of file paths for the inline images.
-//   - isHtml: A flag indicating whether the email should be sent in HTML format.
 //
 // Returns:
 //   - error: An error message if the email fails to send.
 func (e *EmailService) SendEmailWithAttachmentsAndInLineImages(to []string, subject, body string, attachmentPaths []string, inlineImagePaths []string) error {
 	mime := "text/html"
 
-	// Create email body
 	var buffer bytes.Buffer
 	writer := multipart.NewWriter(&buffer)
 
 	// Set headers
-	headers := fmt.Sprintf("Subject: %s\r\nMIME-version: 1.0;\r\nContent-Type: multipart/related; boundary=%s\r\n", subject, writer.Boundary())
+	headers := fmt.Sprintf("Subject: %s\r\nMIME-version: 1.0;\r\nContent-Type: multipart/mixed; boundary=%s\r\n", subject, writer.Boundary())
 	buffer.Write([]byte(headers))
 
 	// Add body part
-	bodyPart, _ := writer.CreatePart(map[string][]string{
+	bodyPart, err := writer.CreatePart(map[string][]string{
 		"Content-Type": {mime + "; charset=\"UTF-8\""},
-	}[0])
+	})
+	if err != nil {
+		return err
+	}
 	bodyPart.Write([]byte(body))
 
 	// Attach inline images
