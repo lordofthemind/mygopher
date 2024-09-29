@@ -12,7 +12,17 @@ import (
 	"github.com/gofiber/template/html/v2"
 )
 
-// ServerConfig holds the configuration for setting up the server.
+// ServerConfig holds the configuration options for the server.
+//
+// Fields:
+// - Port: The port number where the server will listen for incoming requests.
+// - StaticPath: Directory to serve static files from (e.g., CSS, JS, images).
+// - TemplatePath: Path to the directory containing HTML templates.
+// - UseTLS: Set to true if you want to enable HTTPS using TLS.
+// - TLSCertFile: Path to the TLS certificate file (required if UseTLS is true).
+// - TLSKeyFile: Path to the TLS key file (required if UseTLS is true).
+// - UseCORS: Set to true to enable Cross-Origin Resource Sharing (CORS).
+// - CORSConfig: CORS configuration to allow specific origins and methods.
 type ServerConfig struct {
 	Port         int
 	StaticPath   string
@@ -25,44 +35,68 @@ type ServerConfig struct {
 }
 
 // Server interface defines the behavior of a Fiber server.
+//
+// Methods:
+// - Start: Starts the server (optionally with TLS).
+// - GracefulShutdown: Gracefully shuts down the server on interrupt.
+// - GetRouter: Returns the underlying fiber.App instance for adding routes.
 type Server interface {
 	Start() error
 	GracefulShutdown()
 	GetRouter() *fiber.App
 }
 
-// ServerSetup interface defines the setup methods for the Fiber server.
+// ServerSetup interface defines the setup methods for configuring a Fiber server.
+//
+// Methods:
+// - SetUpRouter: Sets up the Fiber app with static files and HTML templates.
+// - SetUpTLS: Configures TLS settings for HTTPS if enabled.
+// - SetUpCORS: Applies CORS middleware to the app if enabled.
 type ServerSetup interface {
 	SetUpRouter(config ServerConfig) *fiber.App
 	SetUpTLS(config ServerConfig) (*tls.Config, error)
 	SetUpCORS(app *fiber.App, config ServerConfig)
 }
 
-// ServerSetupImpl is the concrete implementation of ServerSetup.
+// ServerSetupImpl is the concrete implementation of the ServerSetup interface.
 type ServerSetupImpl struct{}
 
-// SetUpRouter sets up a Fiber server with static files and template paths.
+// SetUpRouter sets up a Fiber app with static file serving and HTML template rendering.
+//
+// Parameters:
+// - config: The ServerConfig structure containing paths for static files and templates.
+//
+// Returns:
+// - *fiber.App: The Fiber app instance with configured routes and template engine.
 func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *fiber.App {
 	// Initialize the HTML template engine
-	engine := html.New(config.TemplatePath, ".html") // Ensure config.TemplatePath points to your templates directory
+	engine := html.New(config.TemplatePath, ".html")
 
-	// Create a new Fiber app with the HTML template engine
+	// Create a new Fiber app and set the template engine
 	app := fiber.New(fiber.Config{
 		Views: engine,
 	})
 
-	// Serve static files from the configured path
+	// Serve static files from the configured directory
 	app.Static("/static", config.StaticPath)
 
 	return app
 }
 
-// SetUpTLS configures TLS (HTTPS) if enabled.
+// SetUpTLS configures TLS (HTTPS) settings if enabled.
+//
+// Parameters:
+// - config: The ServerConfig containing the paths to the TLS certificate and key files.
+//
+// Returns:
+// - *tls.Config: The TLS configuration if UseTLS is true, or nil if not.
+// - error: An error if the certificate or key cannot be loaded.
 func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 	if !config.UseTLS {
 		return nil, nil
 	}
 
+	// Load TLS certificate and key
 	cert, err := tls.LoadX509KeyPair(config.TLSCertFile, config.TLSKeyFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load TLS certificate: %w", err)
@@ -72,12 +106,18 @@ func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 		Certificates: []tls.Certificate{cert},
 	}
 
+	// Return the TLS configuration
 	return tlsConfig, nil
 }
 
-// SetUpCORS configures and applies CORS middleware if enabled.
+// SetUpCORS configures and applies CORS middleware to the app if enabled.
+//
+// Parameters:
+// - app: The Fiber app to apply CORS middleware to.
+// - config: The ServerConfig containing CORS configuration options.
 func (s *ServerSetupImpl) SetUpCORS(app *fiber.App, config ServerConfig) {
 	if config.UseCORS {
+		// Apply CORS middleware with the provided configuration
 		app.Use(cors.New(cors.Config{
 			AllowOrigins: config.CORSConfig.AllowOrigins,
 			AllowMethods: config.CORSConfig.AllowMethods,
@@ -86,7 +126,13 @@ func (s *ServerSetupImpl) SetUpCORS(app *fiber.App, config ServerConfig) {
 	}
 }
 
-// FiberServer wraps the Fiber app and provides modular setup and shutdown.
+// FiberServer wraps the Fiber app and provides modular setup and graceful shutdown.
+//
+// Fields:
+// - app: The Fiber app instance used for routing and middleware.
+// - tlsConfig: Optional TLS configuration for serving HTTPS.
+// - serverSetup: The ServerSetup instance used to configure the server.
+// - config: The ServerConfig structure containing the server's configuration.
 type FiberServer struct {
 	app         *fiber.App
 	tlsConfig   *tls.Config
@@ -94,11 +140,21 @@ type FiberServer struct {
 	config      ServerConfig
 }
 
-// NewFiberServer creates a new FiberServer instance with injected dependencies.
+// NewFiberServer creates a new FiberServer instance with the provided configuration.
+//
+// Parameters:
+// - setup: The ServerSetup implementation to configure the server.
+// - config: The ServerConfig structure containing configuration details.
+//
+// Returns:
+// - Server: A configured Fiber server instance ready to start.
 func NewFiberServer(setup ServerSetup, config ServerConfig) Server {
+	// Initialize the Fiber app with static file serving and template rendering
 	app := setup.SetUpRouter(config)
+	// Configure CORS if enabled
 	setup.SetUpCORS(app, config)
 
+	// Set up TLS if enabled
 	tlsConfig, err := setup.SetUpTLS(config)
 	if err != nil {
 		log.Fatalf("Error setting up TLS: %v", err)
@@ -112,10 +168,14 @@ func NewFiberServer(setup ServerSetup, config ServerConfig) Server {
 	}
 }
 
-// Start starts the Fiber server, with or without TLS.
+// Start starts the Fiber server with or without TLS, depending on the configuration.
+//
+// Returns:
+// - error: Any error encountered during server startup.
 func (fs *FiberServer) Start() error {
 	addr := fmt.Sprintf(":%d", fs.config.Port)
 	if fs.config.UseTLS {
+		// Start the server with TLS
 		log.Printf("Starting server on port %d with TLS", fs.config.Port)
 		go func() {
 			if err := fs.app.ListenTLS(addr, fs.config.TLSCertFile, fs.config.TLSKeyFile); err != nil {
@@ -123,6 +183,7 @@ func (fs *FiberServer) Start() error {
 			}
 		}()
 	} else {
+		// Start the server without TLS
 		log.Printf("Starting server on port %d without TLS", fs.config.Port)
 		go func() {
 			if err := fs.app.Listen(addr); err != nil {
@@ -134,18 +195,26 @@ func (fs *FiberServer) Start() error {
 	return nil
 }
 
-// GetRouter returns the Fiber app instance.
+// GetRouter returns the underlying Fiber app instance.
+//
+// Returns:
+// - *fiber.App: The Fiber app used for routing and middleware.
 func (fs *FiberServer) GetRouter() *fiber.App {
 	return fs.app
 }
 
+// GracefulShutdown shuts down the server gracefully on receiving an interrupt signal.
+//
+// This method ensures ongoing requests are completed before shutting down.
 func (fs *FiberServer) GracefulShutdown() {
+	// Create a channel to listen for OS interrupt signals
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
 
 	log.Println("Shutting down server...")
 
+	// Shutdown the server gracefully
 	if err := fs.app.Shutdown(); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
 	}
