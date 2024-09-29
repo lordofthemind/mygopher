@@ -58,23 +58,50 @@ func ConnectToMongoDB(ctx context.Context, dsn string, timeout time.Duration, ma
 			return nil, fmt.Errorf("context timed out while trying to connect to MongoDB: %w", ctx.Err())
 		default:
 			// Try to establish a connection to MongoDB
+			log.Printf("Attempting to connect to MongoDB... (Attempt %d of %d)", i+1, maxRetries)
 			client, err = mongo.Connect(ctx, options.Client().ApplyURI(dsn))
 			if err == nil {
 				// Successfully connected, verify the connection
 				if err = client.Ping(ctx, nil); err != nil {
-					// If ping fails, return an error
-					return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
+					// If ping fails, log the error and prepare to retry
+					log.Printf("Ping to MongoDB failed: %v", err)
+				} else {
+					// Connection is successful
+					log.Println("Connected to MongoDB successfully")
+					return client, nil
 				}
-				log.Println("Connected to MongoDB successfully")
-				return client, nil
 			}
 
 			// Log the failure and retry after a delay
 			log.Printf("Connection attempt %d failed: %v\n", i+1, err)
+			log.Printf("Retrying connection in %v seconds...", retryDelay.Seconds())
 			time.Sleep(retryDelay) // Wait before the next retry
 		}
 	}
 
-	// Return error if all retries fail
+	// Log final failure before exiting
+	log.Fatalf("Failed to connect to MongoDB after %d attempts: %v", maxRetries, err)
 	return nil, fmt.Errorf("failed to connect to MongoDB after %d retries: %w", maxRetries, err)
 }
+
+// package main
+
+// import (
+// 	"context"
+// 	"log"
+// 	"time"
+
+// 	"github.com/lordofthemind/mygopher/gophermongo"
+// )
+
+// func main() {
+// 	ctx := context.Background()
+// 	client, err := gophermongo.ConnectToMongoDB(ctx, "mongodb://localhost:27017", 10*time.Second, 3)
+// 	if err != nil {
+// 		// This log will not be hit because ConnectToMongoDB exits the application on failure.
+// 		log.Fatalf("Unable to continue: %v", err)
+// 	}
+// 	defer client.Disconnect(ctx)
+
+// 	// Continue with your application logic...
+// }

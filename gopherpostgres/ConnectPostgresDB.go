@@ -61,22 +61,49 @@ func ConnectPostgresDB(ctx context.Context, dsn string, timeout time.Duration, m
 			return nil, fmt.Errorf("context timed out while trying to connect to database: %w", ctx.Err())
 		default:
 			// Try to open the connection using the standard library's sql package
+			log.Printf("Attempting to connect to PostgreSQL... (Attempt %d of %d)", i+1, maxRetries)
 			db, err = sql.Open("postgres", dsn)
 			if err == nil {
-				// Ping the database to ensure connection is established
+				// Ping the database to ensure the connection is established
 				err = db.PingContext(ctx)
 				if err == nil {
 					log.Println("Connected to PostgreSQL successfully")
 					return db, nil // Return the connected DB instance
 				}
+				// Log the ping failure and prepare to retry
+				log.Printf("Ping to PostgreSQL failed: %v", err)
 			}
 
 			// Log the failure and retry after a delay
 			log.Printf("Connection attempt %d failed: %v", i+1, err)
+			log.Printf("Retrying connection in %v seconds...", retryDelay.Seconds())
 			time.Sleep(retryDelay) // Wait before the next retry
 		}
 	}
 
-	// Return error if all retries fail
+	// Log final failure before exiting
+	log.Fatalf("Failed to connect to PostgreSQL after %d attempts: %v", maxRetries, err)
 	return nil, fmt.Errorf("failed to connect to PostgreSQL after %d retries: %w", maxRetries, err)
 }
+
+// package main
+
+// import (
+// 	"context"
+// 	"log"
+// 	"time"
+
+// 	"github.com/lordofthemind/mygopher/gopherpostgres"
+// )
+
+// func main() {
+// 	ctx := context.Background()
+// 	db, err := gopherpostgres.ConnectPostgresDB(ctx, "postgres://user:password@localhost:5432/mydb", 10*time.Second, 3)
+// 	if err != nil {
+// 		// This log will not be hit because ConnectPostgresDB exits the application on failure.
+// 		log.Fatalf("Unable to continue: %v", err)
+// 	}
+// 	defer db.Close()
+
+// 	// Continue with your application logic...
+// }
