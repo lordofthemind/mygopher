@@ -60,7 +60,11 @@ func ConnectToMongoDB(ctx context.Context, dsn string, timeout time.Duration, ma
 			// Try to establish a connection to MongoDB
 			client, err = mongo.Connect(ctx, options.Client().ApplyURI(dsn))
 			if err == nil {
-				// Successfully connected, return the client
+				// Successfully connected, verify the connection
+				if err = client.Ping(ctx, nil); err != nil {
+					// If ping fails, return an error
+					return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
+				}
 				log.Println("Connected to MongoDB successfully")
 				return client, nil
 			}
