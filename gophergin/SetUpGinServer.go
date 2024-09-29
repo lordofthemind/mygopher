@@ -14,7 +14,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ServerConfig holds the configuration for setting up the server
+// ServerConfig holds the configuration for setting up the server.
+//
+// Fields:
+// - Port: Port number to run the server on.
+// - StaticPath: Path to serve static files from.
+// - TemplatePath: Path to HTML templates for rendering.
+// - UseTLS: Enable TLS (HTTPS) if true.
+// - TLSCertFile: Path to the TLS certificate file (required if UseTLS is true).
+// - TLSKeyFile: Path to the TLS key file (required if UseTLS is true).
+// - UseCORS: Enable CORS (Cross-Origin Resource Sharing) if true.
+// - CORSConfig: Configures allowed origins, headers, and methods for CORS.
 type ServerConfig struct {
 	Port         int
 	StaticPath   string
@@ -26,37 +36,60 @@ type ServerConfig struct {
 	CORSConfig   cors.Config
 }
 
-// Server defines the behavior of a Gin server
+// Server interface defines the behavior of a Gin server.
+//
+// Methods:
+// - Start: Starts the server (optionally with TLS).
+// - GracefulShutdown: Gracefully shuts down the server when interrupted.
+// - GetRouter: Returns the underlying gin.Engine for additional route setup.
 type Server interface {
 	Start() error
 	GracefulShutdown()
 	GetRouter() *gin.Engine
 }
 
-// ServerSetup defines the behavior for setting up a Gin server
+// ServerSetup defines the behavior for setting up a Gin server.
+//
+// Methods:
+// - SetUpRouter: Configures and returns a new Gin engine with static file and template paths.
+// - SetUpTLS: Configures TLS settings if required (returns a tls.Config instance).
+// - SetUpCORS: Applies CORS middleware to the Gin engine if enabled.
 type ServerSetup interface {
 	SetUpRouter(config ServerConfig) *gin.Engine
 	SetUpTLS(config ServerConfig) (*tls.Config, error)
 	SetUpCORS(router *gin.Engine, config ServerConfig)
 }
 
-// ServerSetupImpl is the concrete implementation of ServerSetup
+// ServerSetupImpl is the concrete implementation of ServerSetup.
 type ServerSetupImpl struct{}
 
-// SetUpRouter sets up a Gin server with static and template paths
+// SetUpRouter sets up a Gin server with static file and template paths.
+//
+// Parameters:
+// - config: The server configuration for static files and template paths.
+//
+// Returns:
+// - *gin.Engine: A configured Gin engine.
 func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *gin.Engine {
 	router := gin.Default()
 
-	// Serve static files
+	// Serve static files from the configured path.
 	router.Static("/static", config.StaticPath)
 
-	// Load HTML templates
+	// Load HTML templates from the configured path.
 	router.LoadHTMLGlob(config.TemplatePath)
 
 	return router
 }
 
-// SetUpTLS configures the server for TLS if enabled
+// SetUpTLS configures the server for TLS (HTTPS) if enabled.
+//
+// Parameters:
+// - config: The server configuration containing TLS settings.
+//
+// Returns:
+// - *tls.Config: TLS configuration if enabled, or nil if not.
+// - error: An error if TLS certificates cannot be loaded.
 func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 	if !config.UseTLS {
 		return nil, nil
@@ -74,7 +107,11 @@ func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 	return tlsConfig, nil
 }
 
-// SetUpCORS configures and applies CORS middleware if enabled
+// SetUpCORS configures and applies CORS middleware if enabled.
+//
+// Parameters:
+// - router: The Gin engine to apply the middleware to.
+// - config: The server configuration that contains CORS settings.
 func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) {
 	if config.UseCORS {
 		router.Use(cors.New(config.CORSConfig))
@@ -82,7 +119,8 @@ func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) {
 	}
 }
 
-// GinServer is the modular implementation of the Server interface
+// GinServer is the modular implementation of the Server interface.
+// It wraps around Gin's HTTP server and provides modular setup and shutdown.
 type GinServer struct {
 	router      *gin.Engine
 	server      *http.Server
@@ -90,18 +128,25 @@ type GinServer struct {
 	config      ServerConfig
 }
 
-// NewGinServer creates a new GinServer with injected ServerSetup
+// NewGinServer creates a new GinServer instance with injected dependencies.
+//
+// Parameters:
+// - setup: A ServerSetup implementation for initializing the server.
+// - config: The ServerConfig structure for server configuration.
+//
+// Returns:
+// - Server: A configured Gin server ready to start.
 func NewGinServer(setup ServerSetup, config ServerConfig) Server {
 	router := setup.SetUpRouter(config)
 	setup.SetUpCORS(router, config)
 
-	// Create the HTTP server
+	// Create the HTTP server instance.
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", config.Port),
 		Handler: router,
 	}
 
-	// Set TLS if enabled
+	// Set up TLS if enabled.
 	tlsConfig, err := setup.SetUpTLS(config)
 	if err != nil {
 		log.Fatalf("Error setting up TLS: %v", err)
@@ -116,7 +161,10 @@ func NewGinServer(setup ServerSetup, config ServerConfig) Server {
 	}
 }
 
-// Start starts the Gin server with or without TLS
+// Start starts the Gin server, either with or without TLS.
+//
+// Returns:
+// - error: Any error encountered while starting the server.
 func (gs *GinServer) Start() error {
 	if gs.config.UseTLS {
 		log.Printf("Starting server on port %d with TLS", gs.config.Port)
@@ -137,12 +185,18 @@ func (gs *GinServer) Start() error {
 	return nil
 }
 
-// GetRouter returns the gin.Engine instance
+// GetRouter returns the gin.Engine instance.
+//
+// Returns:
+// - *gin.Engine: The underlying Gin engine for the server.
 func (gs *GinServer) GetRouter() *gin.Engine {
 	return gs.router
 }
 
-// GracefulShutdown handles graceful shutdown of the server
+// GracefulShutdown gracefully shuts down the server when interrupted.
+//
+// This method handles system interrupts (e.g., Ctrl+C) and shuts down the server
+// gracefully, allowing for ongoing requests to finish within a 5-second timeout.
 func (gs *GinServer) GracefulShutdown() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
@@ -150,6 +204,7 @@ func (gs *GinServer) GracefulShutdown() {
 
 	log.Println("Shutting down server...")
 
+	// Allow up to 5 seconds for graceful shutdown.
 	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -159,40 +214,31 @@ func (gs *GinServer) GracefulShutdown() {
 	log.Println("Server shutdown successfully")
 }
 
-// func GinServer() {
-//     // Other initialization logic
-
-//     // Create the server
-//     serverConfig := gophergin.ServerConfig{
-//         Port:         configs.ServerPort,
-//         StaticPath:   "./static",
-//         TemplatePath: "./templates",
-//         UseTLS:       configs.UseTLS,
-//         TLSCertFile:  configs.TLSCertFile,
-//         TLSKeyFile:   configs.TLSKeyFile,
-//         UseCORS:      configs.UseCORS,
-//         CORSConfig:   cors.Config{
-//             AllowOrigins: []string{"https://example.com"},
-//         },
-//     }
-
-//     server := gophergin.NewGinServer(&gophergin.ServerSetupImpl{}, serverConfig)
-
-//     // Get the router from the server
-//     router := server.GetRouter()
-
-//     // Add middleware
-//     router.Use(middlewares.RequestIDGinMiddleware())
-
-//     // Set up routes
-//     routes.SetupSuperUserGinRoutes(router, superUserHandler, tokenManager)
-
-//     // Start the server
-//     err := server.Start()
-//     if err != nil {
-//         log.Fatalf("Failed to start server: %v", err)
-//     }
-
-//     // Gracefully shut down the server
-//     server.GracefulShutdown()
-// }
+// Example usage:
+//
+//	func main() {
+//	    config := gophergin.ServerConfig{
+//	        Port:         8080,
+//	        StaticPath:   "./static",
+//	        TemplatePath: "./templates/*.html",
+//	        UseTLS:       true,
+//	        TLSCertFile:  "./certs/server.crt",
+//	        TLSKeyFile:   "./certs/server.key",
+//	        UseCORS:      true,
+//	        CORSConfig: cors.Config{
+//	            AllowOrigins: []string{"https://example.com"},
+//	            AllowMethods: []string{"GET", "POST"},
+//	        },
+//	    }
+//
+//	    server := gophergin.NewGinServer(&gophergin.ServerSetupImpl{}, config)
+//
+//	    // Start the server
+//	    err := server.Start()
+//	    if err != nil {
+//	        log.Fatalf("Failed to start server: %v", err)
+//	    }
+//
+//	    // Gracefully shut down the server on interrupt
+//	    server.GracefulShutdown()
+//	}
