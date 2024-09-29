@@ -26,34 +26,25 @@ type ServerConfig struct {
 	CORSConfig   cors.Config
 }
 
-// ServerSetup defines the interface for setting up a Gin server
-type ServerSetup interface {
-	SetUpServer(config ServerConfig) (*gin.Engine, error)
+// Server defines the behavior of a Gin server
+type Server interface {
+	Start() error
+	GracefulShutdown()
+	GetRouter() *gin.Engine
 }
 
-// CorsServerSetup is the struct for setting up the server with CORS
-type CorsServerSetup struct{}
+// ServerSetup defines the behavior for setting up a Gin server
+type ServerSetup interface {
+	SetUpRouter(config ServerConfig) *gin.Engine
+	SetUpTLS(config ServerConfig) (*tls.Config, error)
+	SetUpCORS(router *gin.Engine, config ServerConfig)
+}
 
-// SetUpServer sets up a Gin server with CORS middleware.
-//
-// This function initializes a Gin server with the provided static and template paths,
-// and applies CORS middleware if configured.
-//
-// Example usage:
-//
-//	serverConfig := ServerConfig{
-//	    StaticPath:   "./static",
-//	    TemplatePath: "./templates",
-//	    UseCORS:      true,
-//	    CORSConfig: cors.Config{
-//	        AllowOrigins: []string{"https://example.com"},
-//	    },
-//	}
-//	router, err := (&CorsServerSetup{}).SetUpServer(serverConfig)
-//	if err != nil {
-//	    log.Fatalf("Failed to set up server: %v", err)
-//	}
-func (c *CorsServerSetup) SetUpServer(config ServerConfig) (*gin.Engine, error) {
+// ServerSetupImpl is the concrete implementation of ServerSetup
+type ServerSetupImpl struct{}
+
+// SetUpRouter sets up a Gin server with static and template paths
+func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *gin.Engine {
 	router := gin.Default()
 
 	// Serve static files
@@ -62,85 +53,82 @@ func (c *CorsServerSetup) SetUpServer(config ServerConfig) (*gin.Engine, error) 
 	// Load HTML templates
 	router.LoadHTMLGlob(config.TemplatePath)
 
-	// Configure and apply CORS middleware if enabled
+	return router
+}
+
+// SetUpTLS configures the server for TLS if enabled
+func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
+	if !config.UseTLS {
+		return nil, nil
+	}
+
+	cert, err := tls.LoadX509KeyPair(config.TLSCertFile, config.TLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load TLS certificate: %w", err)
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	return tlsConfig, nil
+}
+
+// SetUpCORS configures and applies CORS middleware if enabled
+func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) {
 	if config.UseCORS {
 		router.Use(cors.New(config.CORSConfig))
 		log.Printf("CORS configured with settings: %+v", config.CORSConfig)
 	}
-
-	return router, nil
 }
 
-// BasicServerSetup is the struct for setting up the server without CORS
-type BasicServerSetup struct{}
-
-// SetUpServer sets up a basic Gin server without CORS middleware.
-//
-// Example usage:
-//
-//	serverConfig := ServerConfig{
-//	    StaticPath:   "./static",
-//	    TemplatePath: "./templates",
-//	}
-//	router, err := (&BasicServerSetup{}).SetUpServer(serverConfig)
-//	if err != nil {
-//	    log.Fatalf("Failed to set up server: %v", err)
-//	}
-func (b *BasicServerSetup) SetUpServer(config ServerConfig) (*gin.Engine, error) {
-	router := gin.Default()
-
-	// Serve static files
-	router.Static("/static", config.StaticPath)
-
-	// Load HTML templates
-	router.LoadHTMLGlob(config.TemplatePath)
-
-	return router, nil
+// GinServer is the modular implementation of the Server interface
+type GinServer struct {
+	router      *gin.Engine
+	server      *http.Server
+	serverSetup ServerSetup
+	config      ServerConfig
 }
 
-// StartGinServer starts the provided Gin server with or without TLS.
-//
-// This function starts a Gin server using the provided *gin.Engine and ServerConfig.
-// If TLS is enabled, the server will use the provided certificate and key files for HTTPS.
-//
-// Example usage:
-//
-//	err := StartGinServer(router, serverConfig)
-//	if err != nil {
-//	    log.Fatalf("Failed to start server: %v", err)
-//	}
-func StartGinServer(router *gin.Engine, config ServerConfig) error {
-	// Create the HTTP server with the provided router and port
+// NewGinServer creates a new GinServer with injected ServerSetup
+func NewGinServer(setup ServerSetup, config ServerConfig) Server {
+	router := setup.SetUpRouter(config)
+	setup.SetUpCORS(router, config)
+
+	// Create the HTTP server
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", config.Port),
 		Handler: router,
 	}
 
-	if config.UseTLS {
-		// Load the TLS certificate and key
-		cert, err := LoadTLSCertificate(config.TLSCertFile, config.TLSKeyFile)
-		if err != nil {
-			return fmt.Errorf("failed to load TLS certificate: %w", err)
-		}
+	// Set TLS if enabled
+	tlsConfig, err := setup.SetUpTLS(config)
+	if err != nil {
+		log.Fatalf("Error setting up TLS: %v", err)
+	}
+	server.TLSConfig = tlsConfig
 
-		// Configure the server for TLS
-		server.TLSConfig = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-		}
-		log.Printf("Gin server is running on port %d with TLS", config.Port)
+	return &GinServer{
+		router:      router,
+		server:      server,
+		serverSetup: setup,
+		config:      config,
+	}
+}
 
-		// Start the server with TLS
+// Start starts the Gin server with or without TLS
+func (gs *GinServer) Start() error {
+	if gs.config.UseTLS {
+		log.Printf("Starting server on port %d with TLS", gs.config.Port)
 		go func() {
-			if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+			if err := gs.server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 				log.Printf("ListenAndServeTLS error: %v", err)
 			}
 		}()
 	} else {
-		log.Printf("Gin server is running on port %d without TLS", config.Port)
-
-		// Start the server without TLS
+		log.Printf("Starting server on port %d without TLS", gs.config.Port)
 		go func() {
-			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			if err := gs.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Printf("ListenAndServe error: %v", err)
 			}
 		}()
@@ -149,87 +137,62 @@ func StartGinServer(router *gin.Engine, config ServerConfig) error {
 	return nil
 }
 
-// GracefulShutdown handles the graceful shutdown of the Gin server.
-//
-// This function listens for interrupt signals (Ctrl+C) and shuts down the server gracefully,
-// allowing any in-flight requests to complete within a timeout period.
-//
-// Example usage:
-//
-//	go GracefulShutdown(server)
-func GracefulShutdown(server *http.Server) {
-	// Create a channel to listen for interrupt signals
+// GetRouter returns the gin.Engine instance
+func (gs *GinServer) GetRouter() *gin.Engine {
+	return gs.router
+}
+
+// GracefulShutdown handles graceful shutdown of the server
+func (gs *GinServer) GracefulShutdown() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
+
 	log.Println("Shutting down server...")
 
-	// Context with timeout for shutdown
 	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Attempt to shut down the server gracefully
-	if err := server.Shutdown(ctxShutDown); err != nil {
+	if err := gs.server.Shutdown(ctxShutDown); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
-
-		// Retry mechanism for shutdown
-		for retries := 0; retries < 3; retries++ {
-			log.Printf("Retrying shutdown... attempt %d", retries+1)
-			if err := server.Shutdown(ctxShutDown); err == nil {
-				log.Println("Server shutdown successfully on retry")
-				return
-			}
-		}
-		log.Fatalf("Failed to shutdown server gracefully after retries: %v", err)
 	}
-
 	log.Println("Server shutdown successfully")
 }
 
-// LoadTLSCertificate loads the TLS certificate and private key.
-//
-// This function loads a TLS certificate and key from the specified files and returns
-// a tls.Certificate object that can be used to configure HTTPS servers.
-//
-// Example usage:
-//
-//	cert, err := LoadTLSCertificate("/path/to/cert.crt", "/path/to/key.key")
-//	if err != nil {
-//	    log.Fatalf("Failed to load TLS certificate: %v", err)
-//	}
-func LoadTLSCertificate(certFile, keyFile string) (tls.Certificate, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("failed to load TLS certificate: %w", err)
-	}
-	return cert, nil
-}
+// func GinServer() {
+//     // Other initialization logic
 
-// func main() {
-// 	// Define server configuration
-// 	serverConfig := server.ServerConfig{
-// 		Port:        8080,
-// 		StaticPath:  "./static",
-// 		TemplatePath: "./templates",
-// 		UseTLS:      false,
-// 		UseCORS:     true,
-// 		CORSConfig: cors.Config{
-// 			AllowOrigins: []string{"https://example.com"},
-// 			AllowMethods: []string{"GET", "POST"},
-// 		},
-// 	}
+//     // Create the server
+//     serverConfig := gophergin.ServerConfig{
+//         Port:         configs.ServerPort,
+//         StaticPath:   "./static",
+//         TemplatePath: "./templates",
+//         UseTLS:       configs.UseTLS,
+//         TLSCertFile:  configs.TLSCertFile,
+//         TLSKeyFile:   configs.TLSKeyFile,
+//         UseCORS:      configs.UseCORS,
+//         CORSConfig:   cors.Config{
+//             AllowOrigins: []string{"https://example.com"},
+//         },
+//     }
 
-// 	// Set up the server with CORS
-// 	router, err := (&server.CorsServerSetup{}).SetUpServer(serverConfig)
-// 	if err != nil {
-// 		log.Fatalf("Failed to set up server: %v", err)
-// 	}
+//     server := gophergin.NewGinServer(&gophergin.ServerSetupImpl{}, serverConfig)
 
-// 	// Start the server
-// 	if err := server.StartGinServer(router, serverConfig); err != nil {
-// 		log.Fatalf("Failed to start server: %v", err)
-// 	}
+//     // Get the router from the server
+//     router := server.GetRouter()
 
-// 	// Gracefully shutdown on interrupt
-// 	server.GracefulShutdown(&http.Server{Addr: ":8080"})
+//     // Add middleware
+//     router.Use(middlewares.RequestIDGinMiddleware())
+
+//     // Set up routes
+//     routes.SetupSuperUserGinRoutes(router, superUserHandler, tokenManager)
+
+//     // Start the server
+//     err := server.Start()
+//     if err != nil {
+//         log.Fatalf("Failed to start server: %v", err)
+//     }
+
+//     // Gracefully shut down the server
+//     server.GracefulShutdown()
 // }
