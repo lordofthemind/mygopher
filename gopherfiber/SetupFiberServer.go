@@ -9,29 +9,24 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/template/html/v2"
 )
 
 // ServerConfig holds the configuration options for the server.
 //
 // Fields:
 // - Port: The port number where the server will listen for incoming requests.
-// - StaticPath: Directory to serve static files from (e.g., CSS, JS, images).
-// - TemplatePath: Path to the directory containing HTML templates.
 // - UseTLS: Set to true if you want to enable HTTPS using TLS.
 // - TLSCertFile: Path to the TLS certificate file (required if UseTLS is true).
 // - TLSKeyFile: Path to the TLS key file (required if UseTLS is true).
 // - UseCORS: Set to true to enable Cross-Origin Resource Sharing (CORS).
 // - CORSConfig: CORS configuration to allow specific origins and methods.
 type ServerConfig struct {
-	Port         int
-	StaticPath   string
-	TemplatePath string
-	UseTLS       bool
-	TLSCertFile  string
-	TLSKeyFile   string
-	UseCORS      bool
-	CORSConfig   cors.Config
+	Port        int
+	UseTLS      bool
+	TLSCertFile string
+	TLSKeyFile  string
+	UseCORS     bool
+	CORSConfig  cors.Config
 }
 
 // Server interface defines the behavior of a Fiber server.
@@ -49,7 +44,7 @@ type Server interface {
 // ServerSetup interface defines the setup methods for configuring a Fiber server.
 //
 // Methods:
-// - SetUpRouter: Sets up the Fiber app with static files and HTML templates.
+// - SetUpRouter: Sets up the Fiber app without static files or templates.
 // - SetUpTLS: Configures TLS settings for HTTPS if enabled.
 // - SetUpCORS: Applies CORS middleware to the app if enabled.
 type ServerSetup interface {
@@ -61,24 +56,16 @@ type ServerSetup interface {
 // ServerSetupImpl is the concrete implementation of the ServerSetup interface.
 type ServerSetupImpl struct{}
 
-// SetUpRouter sets up a Fiber app with static file serving and HTML template rendering.
+// SetUpRouter sets up a Fiber app without static file serving or template rendering.
 //
 // Parameters:
-// - config: The ServerConfig structure containing paths for static files and templates.
+// - config: The ServerConfig structure.
 //
 // Returns:
-// - *fiber.App: The Fiber app instance with configured routes and template engine.
+// - *fiber.App: The Fiber app instance.
 func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *fiber.App {
-	// Initialize the HTML template engine
-	engine := html.New(config.TemplatePath, ".html")
-
-	// Create a new Fiber app and set the template engine
-	app := fiber.New(fiber.Config{
-		Views: engine,
-	})
-
-	// Serve static files from the configured directory
-	app.Static("/static", config.StaticPath)
+	// Create a new Fiber app
+	app := fiber.New()
 
 	return app
 }
@@ -149,7 +136,7 @@ type FiberServer struct {
 // Returns:
 // - Server: A configured Fiber server instance ready to start.
 func NewFiberServer(setup ServerSetup, config ServerConfig) Server {
-	// Initialize the Fiber app with static file serving and template rendering
+	// Initialize the Fiber app without static file serving or templates
 	app := setup.SetUpRouter(config)
 	// Configure CORS if enabled
 	setup.SetUpCORS(app, config)
@@ -226,13 +213,11 @@ func (fs *FiberServer) GracefulShutdown() {
 //
 //	func main() {
 //	    config := gopherfiber.ServerConfig{
-//	        Port:         8080,
-//	        StaticPath:   "./static",
-//	        TemplatePath: "./templates",
-//	        UseTLS:       true,
-//	        TLSCertFile:  "./certs/server.crt",
-//	        TLSKeyFile:   "./certs/server.key",
-//	        UseCORS:      true,
+//	        Port:        8080,
+//	        UseTLS:      true,
+//	        TLSCertFile: "./certs/server.crt",
+//	        TLSKeyFile:  "./certs/server.key",
+//	        UseCORS:     true,
 //	        CORSConfig: cors.Config{
 //	            AllowOrigins: "https://example.com",
 //	            AllowMethods: "GET,POST",
