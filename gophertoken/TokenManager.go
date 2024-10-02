@@ -1,6 +1,15 @@
 package gophertoken
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+const (
+	TokenTypeJWT    = "jwt"
+	TokenTypePaseto = "paseto"
+)
 
 // TokenManager is the interface for creating and verifying tokens.
 //
@@ -12,7 +21,7 @@ import "time"
 //	  log.Fatal(err)
 //	}
 type TokenManager interface {
-	GenerateToken(username string, duration time.Duration) (string, error)
+	GenerateToken(userID uuid.UUID, username string, duration time.Duration) (string, error)
 	ValidateToken(token string) (*Payload, error)
 }
 
@@ -26,9 +35,9 @@ type TokenManager interface {
 //	}
 func NewTokenManager(tokenType, secretKey string) (TokenManager, error) {
 	switch tokenType {
-	case "jwt":
+	case TokenTypeJWT:
 		return NewJWTMaker(secretKey)
-	case "paseto":
+	case TokenTypePaseto:
 		return NewPasetoMaker(secretKey)
 	default:
 		return nil, ErrInvalidToken
