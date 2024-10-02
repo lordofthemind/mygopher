@@ -32,7 +32,7 @@ func NewJWTMaker(secretKey string) (TokenManager, error) {
 //
 // Example usage:
 //
-//	token, err := maker.GenerateToken("user123", time.Hour)
+//	token, err := maker.GenerateToken(userID, "username123", time.Hour)
 //	if err != nil {
 //	  log.Fatal(err)
 //	}

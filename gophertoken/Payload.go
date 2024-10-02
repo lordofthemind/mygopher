@@ -26,7 +26,7 @@ type Payload struct {
 //
 // Example usage:
 //
-//	payload, err := NewPayload("user123", time.Hour)
+//	payload, err := NewPayload(userID, "username123", time.Hour)
 //	if err != nil {
 //	  log.Fatal(err)
 //	}
