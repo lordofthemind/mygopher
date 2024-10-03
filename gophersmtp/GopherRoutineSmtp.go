@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+var EmailResultsChan = make(chan EmailResult)
+
+type EmailResult struct {
+	Recipient string
+	Error     error
+}
+
 // EmailRoutineService introduces Go routines to enhance email sending efficiency.
 type EmailRoutineService struct {
 	smtpHost string
@@ -20,13 +27,27 @@ type EmailRoutineService struct {
 	password string
 }
 
-// NewEmailRoutineService creates a new instance of EmailRoutineService with the given SMTP configurations.
 func NewEmailRoutineService(smtpHost, smtpPort, username, password string) GopherSmtpInterface {
-	return &EmailRoutineService{
+	service := &EmailRoutineService{
 		smtpHost: smtpHost,
 		smtpPort: smtpPort,
 		username: username,
 		password: password,
+	}
+
+	// Start a goroutine to handle results
+	go service.processEmailResults()
+
+	return service
+}
+
+func (e *EmailRoutineService) processEmailResults() {
+	for result := range EmailResultsChan {
+		if result.Error != nil {
+			fmt.Printf("Failed to send email to %s: %v\n", result.Recipient, result.Error)
+		} else {
+			fmt.Printf("Email sent successfully to %s!\n", result.Recipient)
+		}
 	}
 }
 
