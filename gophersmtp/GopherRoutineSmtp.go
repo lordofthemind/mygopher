@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"log"
 	"mime/multipart"
 	"net/smtp"
 	"os"
@@ -41,17 +43,7 @@ func NewEmailRoutineService(smtpHost, smtpPort, username, password string) Gophe
 	return service
 }
 
-func (e *EmailRoutineService) processEmailResults() {
-	for result := range EmailResultsChan {
-		if result.Error != nil {
-			fmt.Printf("Failed to send email to %s: %v\n", result.Recipient, result.Error)
-		} else {
-			fmt.Printf("Email sent successfully to %s!\n", result.Recipient)
-		}
-	}
-}
-
-// SendEmail sends an email to the recipients using a Go routine.
+// SendEmail sends an email to the recipients using a Go routine and reports results via channel.
 func (e *EmailRoutineService) SendEmail(to []string, subject, body string, isHtml bool) error {
 	mime := "text/plain"
 	if isHtml {
@@ -62,13 +54,18 @@ func (e *EmailRoutineService) SendEmail(to []string, subject, body string, isHtm
 
 	// Go routine to send email asynchronously
 	go func() {
-		smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, []byte(msg))
+		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, []byte(msg))
+		// Send the result to the channel
+		EmailResultsChan <- EmailResult{
+			Recipient: strings.Join(to, ", "),
+			Error:     err,
+		}
 	}()
 
 	return nil
 }
 
-// SendEmailWithAttachments sends an email with attachments using a Go routine.
+// SendEmailWithAttachments sends an email with attachments using a Go routine and reports results via channel.
 func (e *EmailRoutineService) SendEmailWithAttachments(to []string, subject, body string, attachmentPaths []string, isHtml bool) error {
 	mime := "text/plain"
 	if isHtml {
@@ -99,13 +96,18 @@ func (e *EmailRoutineService) SendEmailWithAttachments(to []string, subject, bod
 
 	// Go routine to send email asynchronously
 	go func() {
-		smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
+		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
+		// Send the result to the channel
+		EmailResultsChan <- EmailResult{
+			Recipient: strings.Join(to, ", "),
+			Error:     err,
+		}
 	}()
 
 	return nil
 }
 
-// SendEmailWithHeaders sends an email with custom headers using a Go routine.
+// SendEmailWithHeaders sends an email with custom headers using a Go routine and reports results via channel.
 func (e *EmailRoutineService) SendEmailWithHeaders(to []string, subject, body string, headers map[string]string, isHtml bool) error {
 	mime := "text/plain"
 	if isHtml {
@@ -121,7 +123,12 @@ func (e *EmailRoutineService) SendEmailWithHeaders(to []string, subject, body st
 
 	// Go routine to send email asynchronously
 	go func() {
-		smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, []byte(msg))
+		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, []byte(msg))
+		// Send the result to the channel
+		EmailResultsChan <- EmailResult{
+			Recipient: strings.Join(to, ", "),
+			Error:     err,
+		}
 	}()
 
 	return nil
@@ -137,7 +144,11 @@ func (e *EmailRoutineService) ScheduleEmail(to []string, subject, body string, s
 	// Schedule the email using a Go routine
 	go func() {
 		time.Sleep(delay)
-		e.SendEmail(to, subject, body, isHtml)
+		err := e.SendEmail(to, subject, body, isHtml)
+		EmailResultsChan <- EmailResult{
+			Recipient: strings.Join(to, ", "),
+			Error:     err,
+		}
 	}()
 
 	return nil
@@ -159,7 +170,12 @@ func (e *EmailRoutineService) SendEmailWithCCAndBCC(to, cc, bcc []string, subjec
 
 	// Go routine to send email asynchronously
 	go func() {
-		smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, allRecipients, []byte(headers))
+		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, allRecipients, []byte(headers))
+		// Send the result to the channel
+		EmailResultsChan <- EmailResult{
+			Recipient: strings.Join(allRecipients, ", "),
+			Error:     err,
+		}
 	}()
 
 	return nil
@@ -169,7 +185,13 @@ func (e *EmailRoutineService) SendEmailWithCCAndBCC(to, cc, bcc []string, subjec
 func (e *EmailRoutineService) SendBulkEmail(to []string, subject, body string, isHtml bool) error {
 	for _, recipient := range to {
 		// Send each email in a Go routine
-		go e.SendEmail([]string{recipient}, subject, body, isHtml)
+		go func(recipient string) {
+			err := e.SendEmail([]string{recipient}, subject, body, isHtml)
+			EmailResultsChan <- EmailResult{
+				Recipient: recipient,
+				Error:     err,
+			}
+		}(recipient)
 	}
 	return nil
 }
@@ -202,7 +224,12 @@ func (e *EmailRoutineService) SendEmailWithInLineImages(to []string, subject, bo
 
 	// Go routine to send email asynchronously
 	go func() {
-		smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
+		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
+		// Send the result to the channel
+		EmailResultsChan <- EmailResult{
+			Recipient: strings.Join(to, ", "),
+			Error:     err,
+		}
 	}()
 
 	return nil
@@ -243,26 +270,31 @@ func (e *EmailRoutineService) SendEmailWithAttachmentsAndInLineImages(to []strin
 
 	// Go routine to send email asynchronously
 	go func() {
-		smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
+		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
+		// Send the result to the channel
+		EmailResultsChan <- EmailResult{
+			Recipient: strings.Join(to, ", "),
+			Error:     err,
+		}
 	}()
 
 	return nil
 }
 
-// Helper function to attach a file to the email.
-func (e *EmailRoutineService) attachFile(writer *multipart.Writer, filePath string) error {
-	file, err := os.Open(filePath)
+// Attach file helper function
+func (e *EmailRoutineService) attachFile(writer *multipart.Writer, path string) error {
+	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	part, err := writer.CreateFormFile("attachment", filepath.Base(filePath))
+	filePart, err := writer.CreateFormFile("attachment", filepath.Base(path))
 	if err != nil {
 		return err
 	}
 
-	_, err = part.Write([]byte(filePath))
+	_, err = io.Copy(filePart, file)
 	return err
 }
 
@@ -294,3 +326,48 @@ func (e *EmailRoutineService) attachInlineImage(writer *multipart.Writer, imageP
 	_, err = part.Write(imageData)
 	return err
 }
+
+func (e *EmailRoutineService) processEmailResults() {
+	for result := range EmailResultsChan {
+		if result.Error != nil {
+			log.Printf("Failed to send email to %s: %v\n", result.Recipient, result.Error)
+		} else {
+			log.Printf("Email sent successfully to %s!\n", result.Recipient)
+		}
+	}
+}
+
+// package main
+
+// import (
+// 	"fmt"
+// 	"time"
+// 	"your_module/gophersmtp"
+// )
+
+// func main() {
+// 	emailService := gophersmtp.NewEmailRoutineService("smtp.example.com", "587", "user@example.com", "password")
+
+// 	// Start a goroutine to handle results from the channel
+// 	go func() {
+// 		for result := range gophersmtp.EmailResultsChan {
+// 			if result.Error != nil {
+// 				fmt.Printf("Error sending email to %s: %v\n", result.Recipient, result.Error)
+// 			} else {
+// 				fmt.Printf("Email sent successfully to %s!\n", result.Recipient)
+// 			}
+// 		}
+// 	}()
+
+// 	// Sending email asynchronously
+// 	emailService.SendEmail([]string{"recipient@example.com"}, "Test Subject", "Test Body", false)
+
+// 	// Continue doing other work in the main application
+// 	fmt.Println("Email sending initiated. Doing other work...")
+
+// 	// Simulate doing other work
+// 	time.Sleep(5 * time.Second)
+
+// 	// Keep the application running for the result listener to process
+// 	select {}
+// }
