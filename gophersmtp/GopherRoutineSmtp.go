@@ -44,6 +44,17 @@ func NewEmailRoutineService(smtpHost, smtpPort, username, password string) Gophe
 }
 
 // SendEmail sends an email to the recipients using a Go routine and reports results via channel.
+//
+// This function sends a basic email to the specified recipients. It can handle either text or HTML content.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
 func (e *EmailRoutineService) SendEmail(to []string, subject, body string, isHtml bool) error {
 	mime := "text/plain"
 	if isHtml {
@@ -55,7 +66,6 @@ func (e *EmailRoutineService) SendEmail(to []string, subject, body string, isHtm
 	// Go routine to send email asynchronously
 	go func() {
 		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, []byte(msg))
-		// Send the result to the channel
 		EmailResultsChan <- EmailResult{
 			Recipient: strings.Join(to, ", "),
 			Error:     err,
@@ -66,6 +76,18 @@ func (e *EmailRoutineService) SendEmail(to []string, subject, body string, isHtm
 }
 
 // SendEmailWithAttachments sends an email with attachments using a Go routine and reports results via channel.
+//
+// This function sends an email with one or more file attachments to the specified recipients.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - attachmentPaths: A list of file paths for the attachments.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
 func (e *EmailRoutineService) SendEmailWithAttachments(to []string, subject, body string, attachmentPaths []string, isHtml bool) error {
 	mime := "text/plain"
 	if isHtml {
@@ -78,6 +100,7 @@ func (e *EmailRoutineService) SendEmailWithAttachments(to []string, subject, bod
 	headers := fmt.Sprintf("Subject: %s\r\nMIME-version: 1.0;\r\nContent-Type: multipart/mixed; boundary=%s\r\n", subject, writer.Boundary())
 	buffer.Write([]byte(headers))
 
+	// Create body part of the email
 	bodyPart, err := writer.CreatePart(map[string][]string{
 		"Content-Type": {mime + "; charset=\"UTF-8\""},
 	})
@@ -86,6 +109,7 @@ func (e *EmailRoutineService) SendEmailWithAttachments(to []string, subject, bod
 	}
 	bodyPart.Write([]byte(body))
 
+	// Attach files to the email
 	for _, path := range attachmentPaths {
 		err := e.attachFile(writer, path)
 		if err != nil {
@@ -97,7 +121,6 @@ func (e *EmailRoutineService) SendEmailWithAttachments(to []string, subject, bod
 	// Go routine to send email asynchronously
 	go func() {
 		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
-		// Send the result to the channel
 		EmailResultsChan <- EmailResult{
 			Recipient: strings.Join(to, ", "),
 			Error:     err,
@@ -108,6 +131,18 @@ func (e *EmailRoutineService) SendEmailWithAttachments(to []string, subject, bod
 }
 
 // SendEmailWithHeaders sends an email with custom headers using a Go routine and reports results via channel.
+//
+// This function sends an email with custom headers. It allows for additional headers like 'Reply-To' or 'From'.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - headers: A map of custom headers to include in the email.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
 func (e *EmailRoutineService) SendEmailWithHeaders(to []string, subject, body string, headers map[string]string, isHtml bool) error {
 	mime := "text/plain"
 	if isHtml {
@@ -124,7 +159,6 @@ func (e *EmailRoutineService) SendEmailWithHeaders(to []string, subject, body st
 	// Go routine to send email asynchronously
 	go func() {
 		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, []byte(msg))
-		// Send the result to the channel
 		EmailResultsChan <- EmailResult{
 			Recipient: strings.Join(to, ", "),
 			Error:     err,
@@ -135,6 +169,18 @@ func (e *EmailRoutineService) SendEmailWithHeaders(to []string, subject, body st
 }
 
 // ScheduleEmail schedules an email to be sent at a specific time using a Go routine.
+//
+// This function schedules an email to be sent at a future time.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - sendAt: The time at which the email should be sent.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
 func (e *EmailRoutineService) ScheduleEmail(to []string, subject, body string, sendAt time.Time, isHtml bool) error {
 	delay := time.Until(sendAt)
 	if delay <= 0 {
@@ -155,6 +201,19 @@ func (e *EmailRoutineService) ScheduleEmail(to []string, subject, body string, s
 }
 
 // SendEmailWithCCAndBCC sends an email with CC and BCC recipients using a Go routine.
+//
+// This function sends an email to the specified recipients, including CC and BCC recipients.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - cc: A list of CC recipient email addresses.
+//   - bcc: A list of BCC recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
 func (e *EmailRoutineService) SendEmailWithCCAndBCC(to, cc, bcc []string, subject, body string, isHtml bool) error {
 	mime := "text/plain"
 	if isHtml {
@@ -171,7 +230,6 @@ func (e *EmailRoutineService) SendEmailWithCCAndBCC(to, cc, bcc []string, subjec
 	// Go routine to send email asynchronously
 	go func() {
 		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, allRecipients, []byte(headers))
-		// Send the result to the channel
 		EmailResultsChan <- EmailResult{
 			Recipient: strings.Join(allRecipients, ", "),
 			Error:     err,
@@ -182,6 +240,17 @@ func (e *EmailRoutineService) SendEmailWithCCAndBCC(to, cc, bcc []string, subjec
 }
 
 // SendBulkEmail sends bulk emails using Go routines for each email.
+//
+// This function sends multiple emails to the specified list of recipients by spinning up a Go routine for each.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
 func (e *EmailRoutineService) SendBulkEmail(to []string, subject, body string, isHtml bool) error {
 	for _, recipient := range to {
 		// Send each email in a Go routine
@@ -197,6 +266,17 @@ func (e *EmailRoutineService) SendBulkEmail(to []string, subject, body string, i
 }
 
 // SendEmailWithInLineImages sends an email with inline images using a Go routine.
+//
+// This function sends an email that contains inline images to the specified recipients.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - imagePaths: A list of file paths for the inline images.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
 func (e *EmailRoutineService) SendEmailWithInLineImages(to []string, subject, body string, imagePaths []string) error {
 	mime := "text/html"
 
@@ -206,6 +286,7 @@ func (e *EmailRoutineService) SendEmailWithInLineImages(to []string, subject, bo
 	headers := fmt.Sprintf("Subject: %s\r\nMIME-version: 1.0;\r\nContent-Type: multipart/related; boundary=%s\r\n", subject, writer.Boundary())
 	buffer.Write([]byte(headers))
 
+	// Create body part of the email
 	bodyPart, err := writer.CreatePart(map[string][]string{
 		"Content-Type": {mime + "; charset=\"UTF-8\""},
 	})
@@ -214,6 +295,7 @@ func (e *EmailRoutineService) SendEmailWithInLineImages(to []string, subject, bo
 	}
 	bodyPart.Write([]byte(body))
 
+	// Attach inline images
 	for _, path := range imagePaths {
 		err := e.attachInlineImage(writer, path)
 		if err != nil {
@@ -225,7 +307,6 @@ func (e *EmailRoutineService) SendEmailWithInLineImages(to []string, subject, bo
 	// Go routine to send email asynchronously
 	go func() {
 		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, to, buffer.Bytes())
-		// Send the result to the channel
 		EmailResultsChan <- EmailResult{
 			Recipient: strings.Join(to, ", "),
 			Error:     err,
