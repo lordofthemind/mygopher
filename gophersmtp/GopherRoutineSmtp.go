@@ -235,6 +235,58 @@ func (e *EmailRoutineService) SendEmailWithInLineImages(to []string, subject, bo
 	return nil
 }
 
+// SendEmailWithCCAndBCCAndAttachments sends an email with CC, BCC recipients, and attachments using a Go routine.
+// The isHtml flag determines whether it's text or HTML, and the result is reported via a channel.
+func (e *EmailRoutineService) SendEmailWithCCAndBCCAndAttachments(to, cc, bcc []string, subject, body string, attachmentPaths []string, isHtml bool) error {
+	mime := "text/plain"
+	if isHtml {
+		mime = "text/html"
+	}
+
+	var buffer bytes.Buffer
+	writer := multipart.NewWriter(&buffer)
+
+	// Set headers
+	ccHeader := strings.Join(cc, ",")
+	bccHeader := strings.Join(bcc, ",")
+	headers := fmt.Sprintf("Subject: %s\r\nCC: %s\r\nBCC: %s\r\nMIME-version: 1.0;\r\nContent-Type: multipart/mixed; boundary=%s\r\n", subject, ccHeader, bccHeader, writer.Boundary())
+	buffer.Write([]byte(headers))
+
+	// Add body part
+	bodyPart, err := writer.CreatePart(map[string][]string{
+		"Content-Type": {mime + "; charset=\"UTF-8\""},
+	})
+	if err != nil {
+		return err
+	}
+	bodyPart.Write([]byte(body))
+
+	// Attach files
+	for _, path := range attachmentPaths {
+		err := e.attachFile(writer, path)
+		if err != nil {
+			return err
+		}
+	}
+	writer.Close()
+
+	// Merge recipients
+	allRecipients := append(to, cc...)
+	allRecipients = append(allRecipients, bcc...)
+
+	// Go routine to send email asynchronously
+	go func() {
+		err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, allRecipients, buffer.Bytes())
+		// Send the result to the channel
+		EmailResultsChan <- EmailResult{
+			Recipient: strings.Join(allRecipients, ", "),
+			Error:     err,
+		}
+	}()
+
+	return nil
+}
+
 // SendEmailWithAttachmentsAndInLineImages sends an email with both attachments and inline images using a Go routine.
 func (e *EmailRoutineService) SendEmailWithAttachmentsAndInLineImages(to []string, subject, body string, attachmentPaths, imagePaths []string) error {
 	mime := "text/html"
@@ -336,38 +388,3 @@ func (e *EmailRoutineService) processEmailResults() {
 		}
 	}
 }
-
-// package main
-
-// import (
-// 	"fmt"
-// 	"time"
-// 	"your_module/gophersmtp"
-// )
-
-// func main() {
-// 	emailService := gophersmtp.NewEmailRoutineService("smtp.example.com", "587", "user@example.com", "password")
-
-// 	// Start a goroutine to handle results from the channel
-// 	go func() {
-// 		for result := range gophersmtp.EmailResultsChan {
-// 			if result.Error != nil {
-// 				fmt.Printf("Error sending email to %s: %v\n", result.Recipient, result.Error)
-// 			} else {
-// 				fmt.Printf("Email sent successfully to %s!\n", result.Recipient)
-// 			}
-// 		}
-// 	}()
-
-// 	// Sending email asynchronously
-// 	emailService.SendEmail([]string{"recipient@example.com"}, "Test Subject", "Test Body", false)
-
-// 	// Continue doing other work in the main application
-// 	fmt.Println("Email sending initiated. Doing other work...")
-
-// 	// Simulate doing other work
-// 	time.Sleep(5 * time.Second)
-
-// 	// Keep the application running for the result listener to process
-// 	select {}
-// }

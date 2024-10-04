@@ -271,6 +271,64 @@ func (e *EmailService) SendBulkEmail(to []string, subject, body string, isHtml b
 	return nil
 }
 
+// SendEmailWithCCAndBCCAndAttachments sends an email with CC, BCC recipients, and attachments.
+// The isHtml flag determines whether it's text or HTML.
+//
+// This function sends an email to the specified recipients, including CC, BCC recipients,
+// and attaches one or more files to the email.
+//
+// Params:
+//   - to: A list of recipient email addresses.
+//   - cc: A list of CC recipient email addresses.
+//   - bcc: A list of BCC recipient email addresses.
+//   - subject: The subject of the email.
+//   - body: The content of the email.
+//   - attachmentPaths: A list of file paths for the attachments.
+//   - isHtml: A flag indicating whether the email should be sent in HTML format.
+//
+// Returns:
+//   - error: An error message if the email fails to send.
+func (e *EmailService) SendEmailWithCCAndBCCAndAttachments(to, cc, bcc []string, subject, body string, attachmentPaths []string, isHtml bool) error {
+	mime := "text/plain"
+	if isHtml {
+		mime = "text/html"
+	}
+
+	var buffer bytes.Buffer
+	writer := multipart.NewWriter(&buffer)
+
+	// Set headers
+	ccHeader := strings.Join(cc, ",")
+	bccHeader := strings.Join(bcc, ",")
+	headers := fmt.Sprintf("Subject: %s\r\nCC: %s\r\nBCC: %s\r\nMIME-version: 1.0;\r\nContent-Type: multipart/mixed; boundary=%s\r\n", subject, ccHeader, bccHeader, writer.Boundary())
+	buffer.Write([]byte(headers))
+
+	// Add body part
+	bodyPart, err := writer.CreatePart(map[string][]string{
+		"Content-Type": {mime + "; charset=\"UTF-8\""},
+	})
+	if err != nil {
+		return err
+	}
+	bodyPart.Write([]byte(body))
+
+	// Attach files
+	for _, path := range attachmentPaths {
+		err := e.attachFile(writer, path)
+		if err != nil {
+			return err
+		}
+	}
+	writer.Close()
+
+	// Merge recipients
+	allRecipients := append(to, cc...)
+	allRecipients = append(allRecipients, bcc...)
+
+	// Send the email
+	return smtp.SendMail(e.smtpHost+":"+e.smtpPort, smtp.PlainAuth("", e.username, e.password, e.smtpHost), e.username, allRecipients, buffer.Bytes())
+}
+
 // SendEmailWithAttachmentsAndInLineImages sends an email with both attachments and inline images.
 //
 // This function combines attachments and inline images into a single email. It supports sending

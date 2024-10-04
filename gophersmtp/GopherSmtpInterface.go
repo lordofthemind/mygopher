@@ -27,6 +27,9 @@ type GopherSmtpInterface interface {
 	// Only applicable for HTML emails.
 	SendEmailWithInLineImages(to []string, subject, body string, imagePaths []string) error
 
+	// SendEmailWithCCAndBCCAndAttachments sends an email with CC, BCC, and attachments. The isHtml flag determines text or HTML format.
+	SendEmailWithCCAndBCCAndAttachments(to []string, cc []string, bcc []string, subject, body string, attachmentPaths []string, isHtml bool) error
+
 	// SendEmailWithAttachmentsAndInLineImages sends an email with both attachments and inline images.
 	// Only applicable for HTML emails.
 	SendEmailWithAttachmentsAndInLineImages(to []string, subject, body string, attachmentPaths, imagePaths []string) error
