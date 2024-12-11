@@ -130,11 +130,10 @@ func NewGopherLogger(config LoggerConfig) (*Logger, error) {
 	}
 
 	// Generate log filename with unix timestamp
-	currentTime := time.Now().Format("20060102_150405")
 	if config.Filename == "" {
 		config.Filename = "gopherlogger.log"
 	}
-	logFilePath := filepath.Join(logsDir, fmt.Sprintf("%s_%s", currentTime, config.Filename))
+	logFilePath := filepath.Join(logsDir, config.Filename)
 
 	// Default configuration if not specified
 	if config.MaxBytes == 0 {
