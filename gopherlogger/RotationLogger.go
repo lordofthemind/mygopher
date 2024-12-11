@@ -2,12 +2,14 @@ package gopherlogger
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -49,6 +51,25 @@ const (
 //	fmt.Println(level.String())  // Outputs: "DEBUG"
 func (l LogLevel) String() string {
 	return [...]string{"DEBUG", "INFO", "WARN", "ERROR", "FATAL"}[l]
+}
+
+// ParseLogLevel converts a string representation of a log level into the corresponding LogLevel type.
+// It returns an error if the string does not correspond to a valid LogLevel.
+func ParseLogLevel(level string) (LogLevel, error) {
+	switch strings.ToUpper(level) {
+	case "DEBUG":
+		return DEBUG, nil
+	case "INFO":
+		return INFO, nil
+	case "WARN":
+		return WARN, nil
+	case "ERROR":
+		return ERROR, nil
+	case "FATAL":
+		return FATAL, nil
+	default:
+		return DEBUG, errors.New("invalid log level: " + level)
+	}
 }
 
 // Logger is a sophisticated logging structure providing advanced file rotation and
